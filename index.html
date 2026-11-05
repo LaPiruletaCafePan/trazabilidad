@@ -163,7 +163,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '2.0';
+const APP_VERSION = '2.1';
 const COLS = ['proveedores','documentos','ventas','temporada'];
 const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}};
 let pendingRender = false, LISTO = false;
@@ -279,6 +279,12 @@ async function fbInit(){
 function fbDesconectar(){ FB.unsubs.forEach(u => { try { u(); } catch(e){} }); FB.unsubs = []; }
 function fbConectar(){
   fbDesconectar(); FB.estado = 'conectado'; FB.error = ''; FB.primeros = new Set(); pintaSync();
+  FB.unsubs.push(FB.mod.onSnapshot(fbDocClave(), d => {
+    const k = d.exists() ? String(d.data().key || '').trim() : '';
+    if (localStorage.getItem('gemini_pend')){ subirClave(); return; }
+    if (k && k !== getKey()){ localStorage.setItem('gemini_key', k); localStorage.removeItem('gemini_model'); toast('Clave de Gemini recibida de tu cuenta'); render(); const a = $('#aKey'); if (a) a.value = k; }
+    else if (!k && getKey()) subirClave();
+  }, () => {}));
   COLS.forEach(c => {
     FB.unsubs.push(FB.mod.onSnapshot(fbCol(c), snap => {
       snap.docChanges().forEach(ch => {
@@ -291,6 +297,12 @@ function fbConectar(){
       render();
     }, fbError));
   });
+}
+function fbDocClave(){ return FB.mod.doc(FB.db, 'negocios', 'lapiruleta', 'ajustes', 'gemini'); }
+async function subirClave(){
+  if (!fbActivo()){ if (leerCfg()) localStorage.setItem('gemini_pend', '1'); return; }
+  try { await FB.mod.setDoc(fbDocClave(), {key:getKey(), actualizado:Date.now()}); localStorage.removeItem('gemini_pend'); }
+  catch(e){ localStorage.setItem('gemini_pend', '1'); }
 }
 async function subirFoto(id, blob){
   let u = await blobToDataURL(blob);
@@ -611,7 +623,7 @@ function vInicio(){
   const lineas = todasLineas().filter(l => !l.agotado && validIso(l.caducidad));
   const caducando = lineas.filter(l => diffDays(hoy, pd(l.caducidad)) <= 7);
   let h = '';
-  if (!hasKey()) h += `<div class="banner warn" style="cursor:pointer" onclick="abrirAjustes()">Para leer las fotos automáticamente falta tu clave gratuita de Google Gemini. Toca aquí para ponerla.</div>`;
+  if (!hasKey()) h += `<div class="banner warn" style="cursor:pointer" onclick="abrirAjustes()">${leerCfg() && FB.estado !== 'conectado' ? 'Entra con tu cuenta de Google en Ajustes y la clave de Gemini aparecerá sola.' : 'Para leer las fotos automáticamente falta tu clave gratuita de Google Gemini. Toca aquí para ponerla.'}</div>`;
   if (INSTALAR) h += `<div class="banner info"><div class="row"><span class="grow">Instala la app en tu móvil para abrirla como cualquier otra.</span><button class="btn small solid" onclick="instalar()">Instalar</button></div></div>`;
   h += `<button class="scanbig" onclick="go('escanear')"><b>Escanear factura o albarán</b><span>Haz la foto y se guarda en su proveedor con todos sus productos</span></button>`;
   h += `<div class="stats">
@@ -1025,7 +1037,7 @@ async function borrarVentas(id){ if (!confirm('¿Borrar estas ventas importadas?
 function abrirAjustes(){
   openSheet(sheetHead('Ajustes') + `
     <h3>Lectura de fotos (Google Gemini, gratis)</h3>
-    <p class="note">La app usa la inteligencia artificial gratuita de Google para leer facturas, albaranes y etiquetas. Necesitas una clave gratuita (se crea en 1 minuto con tu cuenta de Google). La clave se guarda solo en este móvil.</p>
+    <p class="note">La app usa la inteligencia artificial gratuita de Google para leer facturas, albaranes y etiquetas. Necesitas una clave gratuita (se crea en 1 minuto con tu cuenta de Google). ${leerCfg() ? 'La clave se guarda en este móvil y en tu cuenta, así aparece sola en tus otros móviles.' : 'La clave se guarda solo en este móvil.'}</p>
     <div class="field"><label for="aKey">Clave de Gemini</label><input id="aKey" type="password" autocomplete="off" value="${esc(getKey())}" placeholder="Pega aquí la clave (empieza por AIza…)"></div>
     <div class="row"><button class="btn solid grow" onclick="guardarKey()">Guardar clave</button><button class="btn" onclick="probarKey()" id="aProbar">Probar</button></div>
     <p class="note"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Abrir Google AI Studio para crear la clave</a></p>
@@ -1042,7 +1054,7 @@ function abrirAjustes(){
     <div class="row"><button class="btn small" onclick="backup()">Descargar copia</button><button class="btn small" onclick="restaurar()">Restaurar copia</button></div>
     <p class="note" style="margin-top:1rem">Versión ${APP_VERSION}</p>`);
 }
-function guardarKey(){ localStorage.setItem('gemini_key', $('#aKey').value.trim()); localStorage.removeItem('gemini_model'); toast('Clave guardada'); render(); }
+function guardarKey(){ localStorage.setItem('gemini_key', $('#aKey').value.trim()); localStorage.removeItem('gemini_model'); if (leerCfg()){ localStorage.setItem('gemini_pend', '1'); subirClave(); } toast('Clave guardada'); render(); }
 async function probarKey(){
   guardarKey(); const b = $('#aProbar'); b.disabled = true; b.textContent = 'Probando…'; toast('Probando la clave… puede tardar unos segundos', 8000);
   try { const r = await askJSON('Responde solo con este JSON: {"ok":true}'); toast(r && r.ok ? 'La clave funciona' : 'Respuesta rara, pero la clave conecta', 4000); }
