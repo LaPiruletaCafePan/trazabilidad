@@ -118,7 +118,7 @@ tr:last-child td{border-bottom:0}
 .spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--ink);animation:sp 1s linear infinite;flex:none}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation-duration:3s}}
-#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:.6rem 1rem;border-radius:10px;font-size:.92rem;z-index:30;max-width:90vw;display:none}
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:.6rem 1rem;border-radius:10px;font-size:.92rem;z-index:30;max-width:90vw;display:none}
 .empty{text-align:center;padding:2rem 1rem;color:var(--muted)}
 .foot{margin:2rem 0 1rem;display:flex;gap:.5rem;flex-wrap:wrap}
 .viewer{position:fixed;inset:0;z-index:40;background:#000;display:flex;align-items:center;justify-content:center}
@@ -162,7 +162,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '1.0';
+const APP_VERSION = '1.1';
 const COLS = ['proveedores','documentos','ventas','temporada'];
 const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}};
 let pendingRender = false, LISTO = false;
@@ -244,7 +244,7 @@ function verFoto(src){
 }
 
 /* ===== Lectura con Claude ===== */
-const GEMINI_MODELOS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const GEMINI_MODELOS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'];
 const getKey = () => (localStorage.getItem('gemini_key') || '').trim();
 const hasKey = () => !!getKey();
 function errMsg(e){
@@ -253,6 +253,7 @@ function errMsg(e){
   if (c === 'bad_key') return 'La clave de Gemini no es válida. Revísala en Ajustes.';
   if (c === 'rate_limited') return 'Has hecho muchas lecturas seguidas. Espera un minuto y vuelve a probar.';
   if (c === 'invalid_json') return 'No se pudo leer bien. Repite la foto con más luz, recta y con el papel entero.';
+  if (c === 'saturado') return 'Los servidores gratuitos de Google están muy ocupados ahora mismo. Espera un par de minutos y vuelve a intentarlo.';
   if (c === 'offline') return 'No hay conexión a internet o Google no responde. Inténtalo de nuevo.';
   return 'No se pudo leer: ' + ((e && e.message) || 'error desconocido');
 }
@@ -272,22 +273,27 @@ async function askJSON(prompt, images){
   const guardado = localStorage.getItem('gemini_model');
   const modelos = guardado ? [guardado, ...GEMINI_MODELOS.filter(m => m !== guardado)] : GEMINI_MODELOS;
   let ultimo = null;
-  for (const m of modelos){
-    let r;
-    try { r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent', {method:'POST', headers:{'Content-Type':'application/json', 'x-goog-api-key':key}, body}); }
-    catch(e){ throw {code:'offline'}; }
-    if (r.ok){
-      localStorage.setItem('gemini_model', m);
-      const j = await r.json();
-      const txt = (((j.candidates || [])[0] || {}).content || {}).parts;
-      return parseJSONTolerante((txt || []).filter(p => !p.thought).map(p => p.text || '').join(''));
+  // Prueba cada modelo; si uno está saturado o sin cupo, pasa al siguiente. Hace 2 vueltas.
+  for (let vuelta = 0; vuelta < 2; vuelta++){
+    if (vuelta > 0) await new Promise(r => setTimeout(r, 4000));
+    for (const m of modelos){
+      let r;
+      try { r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent', {method:'POST', headers:{'Content-Type':'application/json', 'x-goog-api-key':key}, body}); }
+      catch(e){ throw {code:'offline'}; }
+      if (r.ok){
+        localStorage.setItem('gemini_model', m);
+        const j = await r.json();
+        const txt = (((j.candidates || [])[0] || {}).content || {}).parts;
+        return parseJSONTolerante((txt || []).filter(p => !p.thought).map(p => p.text || '').join(''));
+      }
+      const err = await r.json().catch(() => ({})); const msg = (err.error && err.error.message) || ('error ' + r.status);
+      if (r.status === 401 || r.status === 403 || (r.status === 400 && /api key|API_KEY/i.test(msg))) throw {code:'bad_key'};
+      if (r.status === 404){ ultimo = ultimo || {code:'http', message:msg}; continue; }
+      if (r.status === 429){ ultimo = {code:'rate_limited'}; continue; }
+      if (r.status >= 500){ ultimo = {code:'saturado'}; continue; }
+      throw {code:'http', message:msg};
     }
-    const err = await r.json().catch(() => ({})); const msg = (err.error && err.error.message) || ('error ' + r.status);
-    if (r.status === 404){ ultimo = {code:'modelo', message:msg}; continue; }
-    if (r.status === 429) throw {code:'rate_limited'};
-    if (r.status === 400 && /api key|API_KEY/i.test(msg)) throw {code:'bad_key'};
-    if (r.status === 401 || r.status === 403) throw {code:'bad_key'};
-    throw {code:'http', message:msg};
+    if (!ultimo || ultimo.code === 'http') break;
   }
   throw ultimo || {code:'http', message:'Ningún modelo disponible'};
 }
@@ -839,7 +845,7 @@ function abrirAjustes(){
 }
 function guardarKey(){ localStorage.setItem('gemini_key', $('#aKey').value.trim()); localStorage.removeItem('gemini_model'); toast('Clave guardada'); render(); }
 async function probarKey(){
-  guardarKey(); const b = $('#aProbar'); b.disabled = true; b.textContent = 'Probando…';
+  guardarKey(); const b = $('#aProbar'); b.disabled = true; b.textContent = 'Probando…'; toast('Probando la clave… puede tardar unos segundos', 8000);
   try { const r = await askJSON('Responde solo con este JSON: {"ok":true}'); toast(r && r.ok ? 'La clave funciona' : 'Respuesta rara, pero la clave conecta', 4000); }
   catch(e){ toast(errMsg(e), 6000); }
   if (b.isConnected){ b.disabled = false; b.textContent = 'Probar'; }
