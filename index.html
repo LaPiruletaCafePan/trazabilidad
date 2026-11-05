@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trazabilidad · La Piruleta</title>
+<meta name="theme-color" content="#1E2A5A">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F7F8FB; --card:#FFFFFF; --ink:#1E2A5A; --text:#22263A; --muted:#5E6584;
+  --line:#DADCE7; --stamp:#C2362B; --stampbg:#FBE9E7; --tag:#F3D45C; --tagink:#4A3B00;
+  --warn:#A86200; --warnbg:#FFF2DC; --ok:#2D7A4C; --okbg:#E5F4EA; --accent:#2F49B8;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#11142A; --card:#1A1E3A; --ink:#C9D2FF; --text:#E6E8F4; --muted:#9BA2C4;
+    --line:#2D3360; --stamp:#FF7A6E; --stampbg:#3A1E24; --tag:#E9C84A; --tagink:#2A2100;
+    --warn:#FFB65C; --warnbg:#3A2C14; --ok:#6FD39A; --okbg:#173326; --accent:#8EA2FF;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#11142A; --card:#1A1E3A; --ink:#C9D2FF; --text:#E6E8F4; --muted:#9BA2C4;
+  --line:#2D3360; --stamp:#FF7A6E; --stampbg:#3A1E24; --tag:#E9C84A; --tagink:#2A2100;
+  --warn:#FFB65C; --warnbg:#3A2C14; --ok:#6FD39A; --okbg:#173326; --accent:#8EA2FF;
+  color-scheme: dark;
+}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--paper);color:var(--text);font:16px/1.5 "Atkinson Hyperlegible",system-ui,sans-serif;padding-bottom:84px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+h1,h2,h3{font-family:"Bricolage Grotesque",system-ui,sans-serif;color:var(--ink);margin:0;line-height:1.15}
+h1{font-size:1.35rem;font-weight:800}
+h2{font-size:1.25rem;font-weight:800;margin:1.6rem 0 .6rem}
+h3{font-size:1.05rem;font-weight:600}
+button,input,select,textarea{font:inherit;color:inherit}
+img{max-width:100%}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--line);padding:.7rem 1rem;display:flex;align-items:center;gap:.6rem}
+.top .sub{font-size:.8rem;color:var(--muted)}
+.wrap{max-width:720px;margin:0 auto;padding:0 1rem}
+.note{font-size:.9rem;color:var(--muted);margin:.4rem 0}
+.banner{border-radius:12px;padding:.8rem 1rem;margin:.8rem 0;font-size:.95rem}
+.banner.info{background:var(--card);border:1px dashed var(--line)}
+.banner.warn{background:var(--warnbg);color:var(--warn)}
+.banner.stamp{background:var(--stampbg);color:var(--stamp)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;border:1.5px solid var(--ink);background:transparent;color:var(--ink);border-radius:10px;padding:.65rem 1rem;font-weight:700;cursor:pointer;min-height:46px}
+.btn.solid{background:var(--ink);color:var(--paper)}
+.btn.danger{border-color:var(--stamp);color:var(--stamp)}
+.btn.small{min-height:36px;padding:.35rem .7rem;font-size:.9rem}
+.btn:disabled{opacity:.45;cursor:default}
+.btn:focus-visible,.chip:focus-visible,.tabs button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
+.grow{flex:1 1 auto}
+.scanbig{display:flex;flex-direction:column;align-items:flex-start;gap:.3rem;width:100%;text-align:left;background:var(--ink);color:var(--paper);border:0;border-radius:16px;padding:1.2rem 1.2rem 1.1rem;cursor:pointer;margin-top:1rem}
+.scanbig b{font-family:"Bricolage Grotesque",sans-serif;font-size:1.4rem;font-weight:800}
+.scanbig span{opacity:.85;font-size:.92rem}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.8rem}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:.7rem .9rem}
+.stat .n{font-family:"Bricolage Grotesque",sans-serif;font-size:1.35rem;font-weight:800;color:var(--ink)}
+.stat .l{font-size:.85rem;color:var(--muted)}
+.list{display:flex;flex-direction:column;gap:.5rem}
+.item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:.75rem .9rem;cursor:pointer;text-align:left;width:100%}
+.item .t{font-weight:700}
+.item .m{font-size:.88rem;color:var(--muted)}
+.lote{display:inline-block;background:var(--tag);color:var(--tagink);font-weight:700;border-radius:4px;padding:0 .4rem;font-size:.85rem;letter-spacing:.02em}
+.badge{display:inline-block;border-radius:999px;padding:.05rem .55rem;font-size:.8rem;font-weight:700}
+.badge.red{background:var(--stampbg);color:var(--stamp)}
+.badge.amber{background:var(--warnbg);color:var(--warn)}
+.badge.green{background:var(--okbg);color:var(--ok)}
+.badge.grey{background:var(--line);color:var(--muted)}
+.season{display:flex;gap:.8rem;align-items:center;background:var(--card);border:1px solid var(--line);border-left:6px solid var(--warn);border-radius:12px;padding:.7rem .9rem;margin:.5rem 0}
+.season.now{border-left-color:var(--ok)}
+.season .d{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:1.5rem;color:var(--ink);min-width:3.2rem;text-align:center;line-height:1}
+.season .d small{display:block;font-size:.7rem;font-weight:600;color:var(--muted)}
+.chips{display:flex;gap:.4rem;flex-wrap:wrap;margin:.6rem 0}
+.chip{border:1.5px solid var(--line);background:var(--card);border-radius:999px;padding:.35rem .85rem;cursor:pointer;font-weight:700;font-size:.9rem;color:var(--muted)}
+.chip.on{border-color:var(--ink);color:var(--ink)}
+.field{display:flex;flex-direction:column;gap:.2rem;margin:.45rem 0;min-width:0}
+.field label{font-size:.82rem;color:var(--muted);font-weight:700}
+.field input,.field select,.field textarea{background:var(--paper);border:1.5px solid var(--line);border-radius:8px;padding:.55rem .65rem;min-height:44px;width:100%}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 .6rem}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 .5rem}
+.line{border:1px solid var(--line);border-radius:12px;padding:.5rem .75rem .7rem;margin:.6rem 0;background:var(--card)}
+.line .head{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;color:var(--muted);font-weight:700}
+.thumbs{display:flex;gap:.5rem;overflow-x:auto;padding:.3rem 0}
+.thumbs img{height:110px;border-radius:8px;border:1px solid var(--line);cursor:pointer;object-fit:cover}
+.envase{display:flex;gap:.6rem;align-items:center;margin-top:.4rem}
+.envase img{width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.bars{display:flex;flex-direction:column;gap:.45rem}
+.bar .lab{display:flex;justify-content:space-between;font-size:.9rem}
+.bar .track{height:10px;background:var(--line);border-radius:999px;overflow:hidden;margin-top:.15rem}
+.bar .fill{height:100%;background:var(--ink);border-radius:999px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{padding:.5rem .6rem;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-size:.8rem}
+td.num,th.num{text-align:right}
+tr:last-child td{border-bottom:0}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs button{flex:1;background:none;border:0;padding:.5rem 0 .55rem;display:flex;flex-direction:column;align-items:center;gap:.15rem;font-size:.72rem;font-weight:700;color:var(--muted);cursor:pointer}
+.tabs button svg{width:24px;height:24px}
+.tabs button.on{color:var(--ink)}
+.sheet{position:fixed;inset:0;z-index:20;background:rgba(10,12,30,.5);display:flex;align-items:flex-end;justify-content:center}
+.sheet.hidden{display:none}
+.sheet-card{background:var(--paper);width:100%;max-width:720px;max-height:92vh;max-height:92dvh;overflow:auto;border-radius:18px 18px 0 0;padding:1rem 1rem calc(1.2rem + env(safe-area-inset-bottom,0px))}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-bottom:.4rem}
+.x{background:none;border:0;font-size:1.6rem;line-height:1;color:var(--muted);cursor:pointer;padding:.2rem .5rem}
+.busy{display:flex;gap:.7rem;align-items:center;padding:1rem;background:var(--card);border:1px solid var(--line);border-radius:12px;margin:.8rem 0}
+.spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--ink);animation:sp 1s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:3s}}
+#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:.6rem 1rem;border-radius:10px;font-size:.92rem;z-index:30;max-width:90vw;display:none}
+.empty{text-align:center;padding:2rem 1rem;color:var(--muted)}
+.foot{margin:2rem 0 1rem;display:flex;gap:.5rem;flex-wrap:wrap}
+.viewer{position:fixed;inset:0;z-index:40;background:#000;display:flex;align-items:center;justify-content:center}
+.viewer img{max-width:100%;max-height:100%}
+.viewer button{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);right:10px;background:#fff;color:#000;border:0;border-radius:999px;width:44px;height:44px;font-size:1.4rem}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="grow"><h1>Trazabilidad</h1><div class="sub">La Piruleta Café Pan</div></div>
+  <button class="btn small" onclick="abrirAjustes()" aria-label="Ajustes">Ajustes</button>
+</header>
+<main class="wrap" id="app"></main>
+<nav class="tabs" id="tabs"></nav>
+<div id="sheet" class="sheet hidden" onclick="if(event.target===this)closeSheet()"><div class="sheet-card" id="sheetBody"></div></div>
+<div id="toast"></div>
+
+<script>
+/* ===== Utilidades ===== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+function num(v){
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  let s = String(v).replace(/[^\d,.\-]/g, '');
+  if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
+  else s = s.replace(',', '.');
+  const n = parseFloat(s); return isFinite(n) ? n : null;
+}
+const money = n => n == null ? '—' : n.toLocaleString('es-ES', {style:'currency', currency:'EUR'});
+const qty = n => n == null ? '—' : (Math.round(n * 100) / 100).toLocaleString('es-ES');
+const iso = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+const pd = s => { const [y,m,d] = String(s).split('-').map(Number); return new Date(y, m-1, d); };
+const validIso = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+const fdate = s => validIso(s) ? s.slice(8,10) + '/' + s.slice(5,7) + '/' + s.slice(0,4) : '—';
+const today0 = () => { const d = new Date(); d.setHours(0,0,0,0); return d; };
+const diffDays = (a, b) => Math.round((b - a) / 86400000);
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
+
+/* ===== Datos (guardados en el propio móvil) ===== */
+const APP_VERSION = '1.0';
+const COLS = ['proveedores','documentos','ventas','temporada'];
+const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}};
+let pendingRender = false, LISTO = false;
+const IDB = {
+  db:null,
+  open(){ return new Promise((res, rej) => {
+    const r = indexedDB.open('trazabilidad', 1);
+    r.onupgradeneeded = () => { const d = r.result; [...COLS, 'fotos'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n); }); };
+    r.onsuccess = () => { this.db = r.result; res(); }; r.onerror = () => rej(r.error);
+  }); },
+  run(store, mode, fn){ return new Promise((res, rej) => {
+    const t = this.db.transaction(store, mode); const req = fn(t.objectStore(store));
+    t.oncomplete = () => res(req && req.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+  }); },
+  put(st, k, v){ return this.run(st, 'readwrite', s => s.put(v, k)); },
+  del(st, k){ return this.run(st, 'readwrite', s => s.delete(k)); },
+  get(st, k){ return this.run(st, 'readonly', s => s.get(k)); },
+  all(st){ return new Promise((res, rej) => {
+    const o = {}; const t = this.db.transaction(st, 'readonly'); const c = t.objectStore(st).openCursor();
+    c.onsuccess = () => { const cur = c.result; if (cur){ o[cur.key] = cur.value; cur.continue(); } };
+    t.oncomplete = () => res(o); t.onerror = () => rej(t.error);
+  }); }
+};
+const Store = {
+  async init(){
+    try {
+      await IDB.open();
+      for (const c of COLS) S[c] = await IDB.all(c);
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    } catch(e){ toast('No se pudo abrir el almacenamiento del móvil: ' + (e && e.message || 'error'), 6000); }
+    LISTO = true; render();
+  },
+  async save(c, id, data){ S[c][id] = data; await IDB.put(c, id, data); render(); },
+  async del(c, id){ delete S[c][id]; await IDB.del(c, id); render(); }
+};
+
+/* ===== Fotos ===== */
+async function loadImg(file){
+  try { return await createImageBitmap(file); }
+  catch(e){ return await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); }); }
+}
+async function compress(file, max = 1600, q = 0.82){
+  const img = await loadImg(file);
+  const w = img.width, h = img.height, s = Math.min(1, max / Math.max(w, h));
+  const c = document.createElement('canvas'); c.width = Math.round(w * s); c.height = Math.round(h * s);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return await new Promise(r => c.toBlob(r, 'image/jpeg', q));
+}
+const blobToDataURL = b => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
+async function guardarFoto(blob){
+  const id = uid(); await IDB.put('fotos', id, blob); return 'idb:' + id;
+}
+const FOTOURL = {};
+async function fotoURL(ref){
+  if (!ref) return '';
+  if (!ref.startsWith('idb:')) return ref;
+  const id = ref.slice(4); if (FOTOURL[id]) return FOTOURL[id];
+  try { const b = await IDB.get('fotos', id); if (b){ FOTOURL[id] = URL.createObjectURL(b); return FOTOURL[id]; } } catch(e){}
+  return '';
+}
+function hidratarFotos(root){
+  (root || document).querySelectorAll('img[data-foto]').forEach(async img => { const u = await fotoURL(img.dataset.foto); if (u) img.src = u; else img.alt = 'Foto no disponible'; });
+}
+function pickFiles({camera = false, multiple = false, accept = 'image/*'} = {}){
+  return new Promise(res => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = accept; inp.multiple = multiple;
+    if (camera) inp.setAttribute('capture', 'environment');
+    inp.style.display = 'none'; document.body.appendChild(inp);
+    inp.onchange = () => { const f = [...(inp.files || [])]; inp.remove(); res(f); };
+    inp.addEventListener('cancel', () => { inp.remove(); res([]); });
+    inp.click();
+  });
+}
+function verFoto(src){
+  const v = document.createElement('div'); v.className = 'viewer';
+  v.innerHTML = '<img alt="Foto"><button aria-label="Cerrar">×</button>';
+  v.querySelector('img').src = src; v.querySelector('button').onclick = () => v.remove();
+  document.body.appendChild(v);
+}
+
+/* ===== Lectura con Claude ===== */
+const GEMINI_MODELOS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const getKey = () => (localStorage.getItem('gemini_key') || '').trim();
+const hasKey = () => !!getKey();
+function errMsg(e){
+  const c = e && e.code;
+  if (c === 'no_key') return 'Falta tu clave gratuita de Google Gemini. Ve a Ajustes y pégala.';
+  if (c === 'bad_key') return 'La clave de Gemini no es válida. Revísala en Ajustes.';
+  if (c === 'rate_limited') return 'Has hecho muchas lecturas seguidas. Espera un minuto y vuelve a probar.';
+  if (c === 'invalid_json') return 'No se pudo leer bien. Repite la foto con más luz, recta y con el papel entero.';
+  if (c === 'offline') return 'No hay conexión a internet o Google no responde. Inténtalo de nuevo.';
+  return 'No se pudo leer: ' + ((e && e.message) || 'error desconocido');
+}
+const blobToB64 = b => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(',')[1]); fr.readAsDataURL(b); });
+function parseJSONTolerante(t){
+  t = String(t || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  try { return JSON.parse(t); } catch(e){}
+  const i = t.search(/[\[{]/), j = Math.max(t.lastIndexOf('}'), t.lastIndexOf(']'));
+  if (i >= 0 && j > i){ try { return JSON.parse(t.slice(i, j + 1)); } catch(e){} }
+  throw {code:'invalid_json'};
+}
+async function askJSON(prompt, images){
+  const key = getKey(); if (!key) throw {code:'no_key'};
+  const parts = [{text:prompt}];
+  for (const b of images || []) parts.push({inline_data:{mime_type:'image/jpeg', data:await blobToB64(b)}});
+  const body = JSON.stringify({contents:[{role:'user', parts}], generationConfig:{temperature:0, responseMimeType:'application/json'}});
+  const guardado = localStorage.getItem('gemini_model');
+  const modelos = guardado ? [guardado, ...GEMINI_MODELOS.filter(m => m !== guardado)] : GEMINI_MODELOS;
+  let ultimo = null;
+  for (const m of modelos){
+    let r;
+    try { r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent', {method:'POST', headers:{'Content-Type':'application/json', 'x-goog-api-key':key}, body}); }
+    catch(e){ throw {code:'offline'}; }
+    if (r.ok){
+      localStorage.setItem('gemini_model', m);
+      const j = await r.json();
+      const txt = (((j.candidates || [])[0] || {}).content || {}).parts;
+      return parseJSONTolerante((txt || []).filter(p => !p.thought).map(p => p.text || '').join(''));
+    }
+    const err = await r.json().catch(() => ({})); const msg = (err.error && err.error.message) || ('error ' + r.status);
+    if (r.status === 404){ ultimo = {code:'modelo', message:msg}; continue; }
+    if (r.status === 429) throw {code:'rate_limited'};
+    if (r.status === 400 && /api key|API_KEY/i.test(msg)) throw {code:'bad_key'};
+    if (r.status === 401 || r.status === 403) throw {code:'bad_key'};
+    throw {code:'http', message:msg};
+  }
+  throw ultimo || {code:'http', message:'Ningún modelo disponible'};
+}
+const provList = () => Object.values(S.proveedores).map(p => p.nombre).filter(Boolean);
+function promptFactura(){
+  return `Eres el asistente de una cafetería-panadería en España. Te paso la foto (o varias páginas) de una FACTURA o ALBARÁN de un proveedor.
+Extrae los datos y responde SOLO con un objeto JSON con esta forma exacta:
+{"tipo":"factura"|"albaran","proveedor":{"nombre":string,"cif":string|null,"telefono":string|null},"numero":string|null,"fecha":"AAAA-MM-DD"|null,"total":number|null,"lineas":[{"producto":string,"cantidad":number|null,"unidad":string|null,"precio":number|null,"importe":number|null,"lote":string|null,"caducidad":"AAAA-MM-DD"|null}]}
+Reglas:
+- El proveedor es quien EMITE el documento (no el cliente La Piruleta Café Pan C.B.).
+- Números con punto decimal, sin símbolo de euro. "precio" es el precio por unidad sin IVA si se ve; "importe" es el total de esa línea.
+- "producto": nombre legible del artículo, sin códigos internos.
+- "unidad": ud, caja, kg, l, paquete… según figure.
+- Si el documento indica lote o caducidad por línea, inclúyelos; si no, null.
+- "total" es el importe total a pagar con IVA.
+- Si un dato no aparece, pon null. No inventes nada.
+Proveedores ya registrados (si es uno de ellos, usa EXACTAMENTE ese nombre): ${JSON.stringify(provList())}`;
+}
+function promptEnvase(nombre){
+  return `Te paso la foto de la caja, etiqueta o envase de un producto alimentario de una cafetería-panadería. Producto esperado: "${nombre || 'desconocido'}".
+Responde SOLO con un objeto JSON:
+{"producto":string|null,"marca":string|null,"lote":string|null,"caducidad":"AAAA-MM-DD"|null,"tipoFecha":"caducidad"|"consumo preferente"|null}
+Reglas:
+- "lote": el código que aparece junto a L, Lote, LOT o Batch (sin la palabra «Lote»).
+- "caducidad": la fecha de caducidad o de consumo preferente. Si solo aparece mes y año, usa el último día de ese mes. Si el año tiene 2 cifras, es 20XX.
+- Si no se lee un dato, pon null. No inventes nada.`;
+}
+function promptVentas(texto){
+  return `Te paso ${texto ? 'el contenido de un archivo exportado' : 'la foto de un informe'} de ventas del TPV de una cafetería. Extrae las ventas por artículo.
+Responde SOLO con un objeto JSON:
+{"desde":"AAAA-MM-DD"|null,"hasta":"AAAA-MM-DD"|null,"items":[{"producto":string,"cantidad":number|null,"importe":number|null}]}
+Reglas:
+- Agrupa por artículo sumando cantidades e importes si el mismo artículo aparece varias veces.
+- "desde" y "hasta": primer y último día que cubre el informe (si es de un solo día, la misma fecha).
+- Ignora totales generales, impuestos, formas de pago y descuentos.
+- Si no aparece un dato, pon null.${texto ? '\n\nCONTENIDO DEL ARCHIVO:\n' + texto : ''}`;
+}
+
+/* ===== Proveedores ===== */
+function findProv(nombre, cif){
+  const nc = norm(cif).replace(/ /g, ''); const nn = norm(nombre);
+  for (const [id, p] of Object.entries(S.proveedores)){
+    if (nc && nc.length > 5 && norm(p.cif).replace(/ /g, '') === nc) return {id, ...p};
+  }
+  for (const [id, p] of Object.entries(S.proveedores)){
+    const pn = norm(p.nombre);
+    if (nn && pn && (pn === nn || (nn.length > 4 && pn.length > 4 && (pn.includes(nn) || nn.includes(pn))))) return {id, ...p};
+  }
+  return null;
+}
+const provName = id => (S.proveedores[id] && S.proveedores[id].nombre) || 'Sin proveedor';
+function lineImporte(l){ if (l.importe != null) return l.importe; if (l.cantidad != null && l.precio != null) return l.cantidad * l.precio; return null; }
+function docTotal(d){ if (d.total != null) return d.total; return (d.lineas || []).reduce((a, l) => a + (lineImporte(l) || 0), 0); }
+
+/* ===== Temporada ===== */
+function easter(y){
+  const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+  h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+  mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1; return new Date(y, mo-1, da);
+}
+function ventana(t, y){
+  if (t.modo === 'pascua'){ const e = easter(y); return [addDays(e, +t.ini || 0), addDays(e, +t.fin || 0)]; }
+  const [m1, d1] = String(t.ini).split('-').map(Number), [m2, d2] = String(t.fin).split('-').map(Number);
+  const s = new Date(y, m1-1, d1); let e = new Date(y, m2-1, d2); if (e < s) e = new Date(y+1, m2-1, d2);
+  return [s, e];
+}
+function estadoTemp(t){
+  const hoy = today0(), y = hoy.getFullYear(); let best = null;
+  for (const yy of [y-1, y, y+1]){ const [s, e] = ventana(t, yy); if (e >= hoy && (!best || s < best[0])) best = [s, e]; }
+  if (!best) return null;
+  const [s, e] = best;
+  if (s <= hoy) return {estado:'ahora', dias:diffDays(hoy, e), s, e};
+  const falta = diffDays(hoy, s);
+  return {estado: falta <= (t.aviso ?? 21) ? 'pronto' : 'lejos', dias:falta, s, e};
+}
+const TEMP_TIPICAS = [
+  {nombre:'Roscón de Reyes', modo:'fija', ini:'12-15', fin:'01-06', aviso:45, nota:'Encargar pronto al proveedor y abrir encargos de clientes'},
+  {nombre:'Turrones y polvorones', modo:'fija', ini:'11-25', fin:'01-06', aviso:21, nota:''},
+  {nombre:'Buñuelos y huesos de santo', modo:'fija', ini:'10-20', fin:'11-01', aviso:21, nota:'Todos los Santos'},
+  {nombre:'Torrijas', modo:'pascua', ini:-14, fin:0, aviso:21, nota:'Semana Santa (cambia cada año)'},
+  {nombre:'Monas de Pascua', modo:'pascua', ini:-3, fin:1, aviso:21, nota:''},
+  {nombre:'Coca de San Juan', modo:'fija', ini:'06-18', fin:'06-24', aviso:14, nota:''}
+];
+const fmtCorto = d => d.toLocaleDateString('es-ES', {day:'numeric', month:'short'});
+
+/* ===== Navegación ===== */
+const ICON = {
+  inicio:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>',
+  escanear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3"/><path d="M8 9h8M8 12h8M8 15h5"/></svg>',
+  lotes:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>',
+  proveedores:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg>',
+  informes:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>'
+};
+const TABS = [['inicio','Inicio'],['escanear','Escanear'],['lotes','Lotes'],['proveedores','Proveedores'],['informes','Informes']];
+let TAB = (location.hash || '').slice(1); if (!TABS.some(t => t[0] === TAB)) TAB = 'inicio';
+function go(t){ TAB = t; if (location.hash !== '#' + t) location.hash = t; window.scrollTo(0, 0); render(); }
+window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (TABS.some(x => x[0] === t) && t !== TAB){ TAB = t; render(); } });
+function renderTabs(){
+  $('#tabs').innerHTML = TABS.map(([k, l]) => `<button class="${k === TAB ? 'on' : ''}" onclick="go('${k}')" aria-label="${l}">${ICON[k]}<span>${l}</span></button>`).join('');
+}
+function render(){
+  const ae = document.activeElement;
+  if (ae && $('#app').contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT')){ pendingRender = true; return; }
+  pendingRender = false;
+  renderTabs();
+  const v = {inicio:vInicio, escanear:vEscanear, lotes:vLotes, proveedores:vProveedores, informes:vInformes}[TAB];
+  $('#app').innerHTML = v();
+  if (TAB === 'lotes') pintarLotes();
+  hidratarFotos($('#app'));
+}
+document.addEventListener('focusout', () => setTimeout(() => { if (pendingRender) render(); }, 50));
+
+/* ===== Hojas (ventanas) ===== */
+function openSheet(html){ $('#sheetBody').innerHTML = html; $('#sheet').classList.remove('hidden'); document.body.style.overflow = 'hidden'; hidratarFotos($('#sheetBody')); }
+function closeSheet(){ $('#sheet').classList.add('hidden'); $('#sheetBody').innerHTML = ''; document.body.style.overflow = ''; EDIT = null; }
+const sheetHead = t => `<div class="sheet-head"><h2 style="margin:0">${t}</h2><button class="x" onclick="closeSheet()" aria-label="Cerrar">×</button></div>`;
+
+/* ===== Lotes: lista de líneas ===== */
+function todasLineas(){
+  const out = [];
+  for (const [id, d] of Object.entries(S.documentos)){
+    (d.lineas || []).forEach((l, i) => out.push({docId:id, idx:i, ...l, proveedor:provName(d.proveedorId), fecha:d.fecha, tipo:d.tipo}));
+  }
+  return out;
+}
+function cadBadge(c){
+  if (!validIso(c)) return '<span class="badge grey">Sin fecha</span>';
+  const d = diffDays(today0(), pd(c));
+  if (d < 0) return `<span class="badge red">Caducado ${fdate(c)}</span>`;
+  if (d <= 7) return `<span class="badge amber">Caduca en ${d} día${d === 1 ? '' : 's'}</span>`;
+  return `<span class="badge green">Cad. ${fdate(c)}</span>`;
+}
+
+/* ===== Vista: Inicio ===== */
+function vInicio(){
+  const temps = Object.entries(S.temporada).map(([id, t]) => ({id, ...t, st:estadoTemp(t)})).filter(t => t.st);
+  const avisos = temps.filter(t => t.st.estado !== 'lejos').sort((a, b) => a.st.s - b.st.s);
+  const hoy = today0(), mes = iso(hoy).slice(0, 7);
+  const docsMes = Object.values(S.documentos).filter(d => (d.fecha || '').slice(0, 7) === mes);
+  const gastoMes = docsMes.reduce((a, d) => a + docTotal(d), 0);
+  const lineas = todasLineas().filter(l => !l.agotado && validIso(l.caducidad));
+  const caducando = lineas.filter(l => diffDays(hoy, pd(l.caducidad)) <= 7);
+  let h = '';
+  if (!hasKey()) h += `<div class="banner warn" style="cursor:pointer" onclick="abrirAjustes()">Para leer las fotos automáticamente falta tu clave gratuita de Google Gemini. Toca aquí para ponerla.</div>`;
+  if (INSTALAR) h += `<div class="banner info"><div class="row"><span class="grow">Instala la app en tu móvil para abrirla como cualquier otra.</span><button class="btn small solid" onclick="instalar()">Instalar</button></div></div>`;
+  h += `<button class="scanbig" onclick="go('escanear')"><b>Escanear factura o albarán</b><span>Haz la foto y se guarda en su proveedor con todos sus productos</span></button>`;
+  h += `<div class="stats">
+    <div class="stat"><div class="n">${money(gastoMes)}</div><div class="l">Gastado este mes</div></div>
+    <div class="stat"><div class="n">${docsMes.length}</div><div class="l">Documentos este mes</div></div>
+    <div class="stat"><div class="n">${Object.keys(S.proveedores).length}</div><div class="l">Proveedores</div></div>
+    <div class="stat" style="${caducando.length ? 'border-color:var(--stamp)' : ''}"><div class="n" style="${caducando.length ? 'color:var(--stamp)' : ''}">${caducando.length}</div><div class="l">Lotes caducados o a 7 días</div></div>
+  </div>`;
+  if (caducando.length) h += `<div class="banner stamp" style="cursor:pointer" onclick="LFILTRO='pendientes';go('lotes')">Tienes ${caducando.length} lote${caducando.length === 1 ? '' : 's'} caducado${caducando.length === 1 ? '' : 's'} o a punto de caducar. Toca para verlos.</div>`;
+  h += `<h2>Temporada</h2>`;
+  if (!Object.keys(S.temporada).length){
+    h += `<div class="banner info">Aún no tienes fechas de temporada. <div class="row" style="margin-top:.6rem"><button class="btn small solid" onclick="cargarTipicas()">Añadir las fechas típicas</button><button class="btn small" onclick="editTemp()">Añadir una</button></div></div>`;
+  } else {
+    if (!avisos.length) h += `<p class="note">Ningún producto de temporada cerca ahora mismo.</p>`;
+    avisos.forEach(t => {
+      const now = t.st.estado === 'ahora';
+      h += `<div class="season ${now ? 'now' : ''}"><div class="d">${t.st.dias}<small>${now ? (t.st.dias === 1 ? 'día queda' : 'días quedan') : (t.st.dias === 1 ? 'día' : 'días')}</small></div>
+        <div><div class="t" style="font-weight:700">${esc(t.nombre)}</div><div class="note" style="margin:0">${now ? 'En temporada hasta el ' + fmtCorto(t.st.e) : 'Empieza el ' + fmtCorto(t.st.s) + ' · hasta el ' + fmtCorto(t.st.e)}${t.nota ? '<br>' + esc(t.nota) : ''}</div></div></div>`;
+    });
+    h += `<button class="btn small" onclick="verTemporadas()">Ver y editar fechas de temporada</button>`;
+  }
+  h += `<div class="foot"><button class="btn small" onclick="backup()">Descargar copia de seguridad</button><button class="btn small" onclick="restaurar()">Restaurar copia</button></div><p class="note">Versión ${APP_VERSION}. Los datos y fotos se guardan en este móvil.</p>`;
+  return h;
+}
+async function cargarTipicas(){
+  for (const t of TEMP_TIPICAS) await Store.save('temporada', uid(), t);
+  toast('Fechas de temporada añadidas');
+}
+function verTemporadas(){
+  const list = Object.entries(S.temporada).map(([id, t]) => ({id, ...t, st:estadoTemp(t)})).sort((a, b) => (a.st ? a.st.s : 0) - (b.st ? b.st.s : 0));
+  openSheet(sheetHead('Fechas de temporada') +
+    `<p class="note">La app te avisa en Inicio cuando falten menos días de los indicados para empezar.</p><div class="list">` +
+    list.map(t => `<button class="item" onclick="editTemp('${t.id}')"><div class="t">${esc(t.nombre)}</div><div class="m">${t.st ? fmtCorto(t.st.s) + ' – ' + fmtCorto(t.st.e) : ''} · aviso ${t.aviso ?? 21} días antes${t.modo === 'pascua' ? ' · según Semana Santa' : ''}</div></button>`).join('') +
+    `</div><div class="row" style="margin-top:1rem"><button class="btn solid" onclick="editTemp()">Añadir fecha</button></div>`);
+}
+function editTemp(id){
+  const t = id ? S.temporada[id] : {nombre:'', modo:'fija', ini:'12-01', fin:'12-31', aviso:21, nota:''};
+  const y = new Date().getFullYear();
+  openSheet(sheetHead(id ? 'Editar fecha' : 'Nueva fecha de temporada') + `
+    <div class="field"><label for="tNom">Producto</label><input id="tNom" value="${esc(t.nombre)}" placeholder="Ej.: Roscón de Reyes"></div>
+    <div class="field"><label for="tModo">Cómo se calcula la fecha</label><select id="tModo" onchange="tModo()">
+      <option value="fija" ${t.modo !== 'pascua' ? 'selected' : ''}>Mismas fechas todos los años</option>
+      <option value="pascua" ${t.modo === 'pascua' ? 'selected' : ''}>Según Semana Santa (cambia cada año)</option></select></div>
+    <div id="tFija" class="grid2" style="${t.modo === 'pascua' ? 'display:none' : ''}">
+      <div class="field"><label for="tIni">Empieza (el año da igual)</label><input type="date" id="tIni" value="${t.modo !== 'pascua' ? y + '-' + t.ini : ''}"></div>
+      <div class="field"><label for="tFin">Termina</label><input type="date" id="tFin" value="${t.modo !== 'pascua' ? y + '-' + t.fin : ''}"></div></div>
+    <div id="tPas" style="${t.modo === 'pascua' ? '' : 'display:none'}"><p class="note">Días respecto al Domingo de Resurrección: negativo = antes, positivo = después.</p><div class="grid2">
+      <div class="field"><label for="tPi">Empieza (días)</label><input type="number" id="tPi" value="${t.modo === 'pascua' ? t.ini : -14}"></div>
+      <div class="field"><label for="tPf">Termina (días)</label><input type="number" id="tPf" value="${t.modo === 'pascua' ? t.fin : 0}"></div></div></div>
+    <div class="field"><label for="tAv">Avisarme cuántos días antes</label><input type="number" id="tAv" min="0" value="${t.aviso ?? 21}"></div>
+    <div class="field"><label for="tNota">Nota (opcional)</label><input id="tNota" value="${esc(t.nota || '')}" placeholder="Ej.: llamar al proveedor para reservar"></div>
+    <div class="row" style="margin-top:.8rem"><button class="btn solid grow" onclick="guardarTemp('${id || ''}')">Guardar</button>${id ? `<button class="btn danger" onclick="borrarTemp('${id}')">Eliminar</button>` : ''}</div>`);
+}
+function tModo(){ const p = $('#tModo').value === 'pascua'; $('#tFija').style.display = p ? 'none' : ''; $('#tPas').style.display = p ? '' : 'none'; }
+async function guardarTemp(id){
+  const nombre = $('#tNom').value.trim(); if (!nombre) return toast('Escribe el nombre del producto');
+  const modo = $('#tModo').value; const t = {nombre, modo, aviso:parseInt($('#tAv').value || '21', 10), nota:$('#tNota').value.trim()};
+  if (modo === 'pascua'){ t.ini = parseInt($('#tPi').value || '0', 10); t.fin = parseInt($('#tPf').value || '0', 10); if (t.fin < t.ini) return toast('El final no puede ser antes del inicio'); }
+  else { const a = $('#tIni').value, b = $('#tFin').value; if (!a || !b) return toast('Pon las dos fechas'); t.ini = a.slice(5); t.fin = b.slice(5); }
+  await Store.save('temporada', id || uid(), t); toast('Guardado'); verTemporadas();
+}
+async function borrarTemp(id){ if (!confirm('¿Eliminar esta fecha de temporada?')) return; await Store.del('temporada', id); verTemporadas(); }
+
+/* ===== Vista: Escanear ===== */
+let PAGINAS = []; let LEYENDO = false;
+function vEscanear(){
+  let h = `<h2>Escanear factura o albarán</h2><p class="note">Pon el papel sobre una superficie lisa, con buena luz y entero en la foto. Si tiene varias páginas, añádelas todas antes de leer.</p>`;
+  if (PAGINAS.length) h += `<div class="thumbs">${PAGINAS.map((p, i) => `<img src="${p.url}" alt="Página ${i + 1}" onclick="quitarPagina(${i})">`).join('')}</div><p class="note">${PAGINAS.length} página${PAGINAS.length === 1 ? '' : 's'}. Toca una para quitarla.</p>`;
+  if (LEYENDO) return h + `<div class="busy"><div class="spin"></div><div>Leyendo el documento… suele tardar entre 20 y 60 segundos.</div></div>`;
+  h += `<div class="row" style="margin-top:.6rem"><button class="btn solid grow" onclick="addPagina(true)">${PAGINAS.length ? 'Añadir otra página' : 'Hacer foto'}</button><button class="btn grow" onclick="addPagina(false)">Elegir de la galería</button></div>`;
+  if (PAGINAS.length) h += `<button class="scanbig" onclick="leerDocumento()"><b>Leer documento</b><span>Saca proveedor, fecha, productos, cantidades y precios</span></button>`;
+  h += `<div class="row" style="margin-top:1rem"><button class="btn small" onclick="nuevoManual()">Introducir a mano</button></div>`;
+  return h;
+}
+async function addPagina(camera){
+  const files = await pickFiles({camera, multiple:!camera});
+  for (const f of files){ try { const b = await compress(f); PAGINAS.push({blob:b, url:URL.createObjectURL(b)}); } catch(e){ toast('No se pudo abrir esa imagen'); } }
+  render();
+}
+function quitarPagina(i){ if (confirm('¿Quitar esta página?')){ PAGINAS.splice(i, 1); render(); } }
+async function leerDocumento(){
+  if (!PAGINAS.length || LEYENDO) return;
+  if (!hasKey()){ toast(errMsg({code:'no_key'}), 5000); return abrirAjustes(); }
+  LEYENDO = true; render();
+  try {
+    const r = await askJSON(promptFactura(), PAGINAS.map(p => p.blob));
+    const blobs = PAGINAS.map(p => p.blob);
+    LEYENDO = false; PAGINAS = []; render();
+    abrirEditor(borradorDesde(r), blobs, true);
+  } catch(e){ LEYENDO = false; render(); toast(errMsg(e), 6000); }
+}
+function borradorDesde(r){
+  r = r || {}; const p = r.proveedor || {};
+  const m = findProv(p.nombre, p.cif);
+  return {
+    id:uid(), tipo:(String(r.tipo || '').toLowerCase().startsWith('alb') ? 'albaran' : 'factura'),
+    proveedorId: m ? m.id : (p.nombre ? '__new' : ''), proveedorNuevo:p.nombre || '', cif:p.cif || '', telefono:p.telefono || '',
+    numero:r.numero || '', fecha: validIso(r.fecha) ? r.fecha : iso(new Date()), total:num(r.total), fotos:[],
+    lineas:(Array.isArray(r.lineas) ? r.lineas : []).filter(l => l && l.producto).map(l => ({
+      producto:String(l.producto), cantidad:num(l.cantidad), unidad:l.unidad || '', precio:num(l.precio), importe:num(l.importe),
+      lote:l.lote || '', caducidad: validIso(l.caducidad) ? l.caducidad : '', fotoEnvase:'', agotado:false }))
+  };
+}
+function nuevoManual(){
+  const blobs = PAGINAS.map(p => p.blob); PAGINAS = []; render();
+  abrirEditor({id:uid(), tipo:'albaran', proveedorId:'', proveedorNuevo:'', cif:'', telefono:'', numero:'', fecha:iso(new Date()), total:null, fotos:[], lineas:[]}, blobs, true);
+}
+
+/* ===== Editor de documento ===== */
+let EDIT = null;
+function abrirDoc(id){
+  const d = S.documentos[id]; if (!d) return;
+  abrirEditor(JSON.parse(JSON.stringify({id, ...d, proveedorNuevo:'', cif:'', telefono:''})), [], false);
+}
+function abrirEditor(draft, blobs, nuevo){ EDIT = {draft, blobs:blobs || [], nuevo, envases:{}}; pintarEditor(); }
+function pintarEditor(){
+  const d = EDIT.draft;
+  const provs = Object.entries(S.proveedores).sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
+  const fotos = [...(d.fotos || []).map(ref => ({ref})), ...EDIT.blobs.map(b => ({src:URL.createObjectURL(b)}))];
+  let h = sheetHead(EDIT.nuevo ? 'Revisa los datos' : (d.tipo === 'albaran' ? 'Albarán' : 'Factura'));
+  if (EDIT.nuevo) h += `<p class="note">Comprueba lo que se ha leído y corrige lo que haga falta antes de guardar.</p>`;
+  if (fotos.length) h += `<div class="thumbs">${fotos.map(f => f.ref ? `<img data-foto="${esc(f.ref)}" alt="Documento" onclick="verFoto(this.src)">` : `<img src="${esc(f.src)}" alt="Documento" onclick="verFoto(this.src)">`).join('')}</div>`;
+  h += `<div class="grid2">
+    <div class="field"><label for="eTipo">Tipo</label><select id="eTipo"><option value="factura" ${d.tipo === 'factura' ? 'selected' : ''}>Factura</option><option value="albaran" ${d.tipo === 'albaran' ? 'selected' : ''}>Albarán</option></select></div>
+    <div class="field"><label for="eFecha">Fecha</label><input type="date" id="eFecha" value="${esc(d.fecha)}"></div></div>
+    <div class="field"><label for="eProv">Proveedor</label><select id="eProv" onchange="$('#eNuevoBox').style.display=this.value==='__new'?'':'none'">
+      <option value="" ${!d.proveedorId ? 'selected' : ''}>Elige el proveedor…</option>
+      ${provs.map(([id, p]) => `<option value="${id}" ${d.proveedorId === id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}
+      <option value="__new" ${d.proveedorId === '__new' ? 'selected' : ''}>Nuevo proveedor${d.proveedorNuevo ? ': ' + esc(d.proveedorNuevo) : ''}</option></select></div>
+    <div id="eNuevoBox" style="${d.proveedorId === '__new' ? '' : 'display:none'}">
+      <div class="field"><label for="eNuevo">Nombre del nuevo proveedor</label><input id="eNuevo" value="${esc(d.proveedorNuevo)}"></div>
+      <div class="grid2"><div class="field"><label for="eCif">CIF / NIF</label><input id="eCif" value="${esc(d.cif)}"></div>
+      <div class="field"><label for="eTel">Teléfono</label><input id="eTel" inputmode="tel" value="${esc(d.telefono)}"></div></div></div>
+    <div class="grid2"><div class="field"><label for="eNum">Número</label><input id="eNum" value="${esc(d.numero)}"></div>
+    <div class="field"><label for="eTotal">Total (€)</label><input id="eTotal" inputmode="decimal" value="${d.total ?? ''}"></div></div>
+    <h3 style="margin-top:1rem">Productos (${d.lineas.length})</h3>`;
+  d.lineas.forEach((l, i) => {
+    const envNueva = EDIT.envases[i] ? URL.createObjectURL(EDIT.envases[i]) : ''; const env = envNueva || l.fotoEnvase;
+    h += `<div class="line" data-i="${i}">
+      <div class="head"><span>Producto ${i + 1}</span><button class="x" style="font-size:1.2rem" onclick="quitarLinea(${i})" aria-label="Quitar producto">×</button></div>
+      <div class="field"><label>Nombre</label><input data-k="producto" value="${esc(l.producto)}"></div>
+      <div class="grid3">
+        <div class="field"><label>Cantidad</label><input data-k="cantidad" inputmode="decimal" value="${l.cantidad ?? ''}"></div>
+        <div class="field"><label>Unidad</label><input data-k="unidad" value="${esc(l.unidad)}"></div>
+        <div class="field"><label>Precio/u</label><input data-k="precio" inputmode="decimal" value="${l.precio ?? ''}"></div></div>
+      <div class="grid3">
+        <div class="field"><label>Importe</label><input data-k="importe" inputmode="decimal" value="${l.importe ?? ''}"></div>
+        <div class="field"><label>Lote</label><input data-k="lote" value="${esc(l.lote)}"></div>
+        <div class="field"><label>Caducidad</label><input data-k="caducidad" type="date" value="${esc(l.caducidad)}"></div></div>
+      <div class="envase">${envNueva ? `<img src="${esc(envNueva)}" alt="Envase" onclick="verFoto(this.src)">` : (env ? `<img data-foto="${esc(env)}" alt="Envase" onclick="verFoto(this.src)">` : '')}
+        <button class="btn small" id="envBtn${i}" onclick="fotoEnvase(${i})">${env ? 'Repetir foto del envase' : 'Foto del envase (lote y caducidad)'}</button></div>
+      ${l.agotado ? '<p class="note">Marcado como gastado.</p>' : ''}
+    </div>`;
+  });
+  h += `<button class="btn small" onclick="addLinea()">Añadir producto</button>
+    <div class="row" style="margin-top:1.2rem"><button class="btn solid grow" id="eGuardar" onclick="guardarDoc()">Guardar</button>
+    ${!EDIT.nuevo ? `<button class="btn danger" onclick="borrarDoc()">Eliminar</button>` : ''}</div>`;
+  openSheet(h);
+}
+function syncEditor(){
+  if (!EDIT) return; const d = EDIT.draft;
+  d.tipo = $('#eTipo').value; d.fecha = $('#eFecha').value; d.proveedorId = $('#eProv').value;
+  d.proveedorNuevo = $('#eNuevo').value; d.cif = $('#eCif').value; d.telefono = $('#eTel').value;
+  d.numero = $('#eNum').value.trim(); d.total = num($('#eTotal').value);
+  document.querySelectorAll('#sheetBody .line').forEach(div => {
+    const l = d.lineas[+div.dataset.i]; if (!l) return;
+    div.querySelectorAll('[data-k]').forEach(inp => {
+      const k = inp.dataset.k;
+      l[k] = ['cantidad','precio','importe'].includes(k) ? num(inp.value) : inp.value.trim();
+    });
+  });
+}
+function addLinea(){ syncEditor(); EDIT.draft.lineas.push({producto:'', cantidad:null, unidad:'', precio:null, importe:null, lote:'', caducidad:'', fotoEnvase:'', agotado:false}); pintarEditor(); }
+function quitarLinea(i){
+  syncEditor(); if (!confirm('¿Quitar este producto?')) return;
+  EDIT.draft.lineas.splice(i, 1);
+  const n = {}; Object.entries(EDIT.envases).forEach(([k, v]) => { k = +k; if (k < i) n[k] = v; else if (k > i) n[k - 1] = v; }); EDIT.envases = n;
+  pintarEditor();
+}
+async function fotoEnvase(i){
+  syncEditor();
+  const files = await pickFiles({camera:true}); if (!files.length || !EDIT) return;
+  let blob; try { blob = await compress(files[0]); } catch(e){ return toast('No se pudo abrir esa imagen'); }
+  EDIT.envases[i] = blob;
+  const l = EDIT.draft.lineas[i];
+  if (!hasKey()){ pintarEditor(); return toast('Foto añadida. Sin clave de Gemini: escribe el lote y la caducidad a mano.', 5000); }
+  const b = $('#envBtn' + i); if (b){ b.disabled = true; b.textContent = 'Leyendo etiqueta…'; }
+  try {
+    const r = await askJSON(promptEnvase(l.producto), [blob]);
+    if (!EDIT) return;
+    if (r && r.lote) l.lote = String(r.lote);
+    if (r && validIso(r.caducidad)) l.caducidad = r.caducidad;
+    if (r && !l.producto && r.producto) l.producto = r.producto;
+    pintarEditor();
+    toast(r && (r.lote || r.caducidad) ? 'Lote y fecha leídos. Revísalos y pulsa Guardar.' : 'No se vio lote ni fecha. Escríbelos a mano.', 5000);
+  } catch(e){ if (EDIT) pintarEditor(); toast(errMsg(e), 6000); }
+}
+async function guardarDoc(){
+  syncEditor(); const d = EDIT.draft;
+  let provId = d.proveedorId;
+  if (!provId) return toast('Elige el proveedor');
+  if (!validIso(d.fecha)) return toast('Pon la fecha del documento');
+  const btn = $('#eGuardar'); btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    if (provId === '__new'){
+      const nombre = (d.proveedorNuevo || '').trim(); if (!nombre){ btn.disabled = false; btn.textContent = 'Guardar'; return toast('Escribe el nombre del proveedor'); }
+      const ex = findProv(nombre, d.cif);
+      if (ex) provId = ex.id; else { provId = uid(); await Store.save('proveedores', provId, {nombre, cif:(d.cif || '').trim(), telefono:(d.telefono || '').trim(), creado:Date.now()}); }
+    }
+    if (EDIT.nuevo && d.numero){
+      const dup = Object.values(S.documentos).find(x => x.proveedorId === provId && norm(x.numero) === norm(d.numero));
+      if (dup && !confirm('Ya tienes guardado un documento de este proveedor con el número ' + d.numero + '. ¿Guardarlo otra vez?')){ btn.disabled = false; btn.textContent = 'Guardar'; return; }
+    }
+    const fotos = [...(d.fotos || [])];
+    for (const b of EDIT.blobs) fotos.push(await guardarFoto(b));
+    const lineas = [];
+    for (let i = 0; i < d.lineas.length; i++){
+      const l = d.lineas[i]; if (!l.producto) continue;
+      let fe = l.fotoEnvase || '';
+      if (EDIT.envases[i]) fe = await guardarFoto(EDIT.envases[i]);
+      lineas.push({producto:l.producto, cantidad:l.cantidad, unidad:l.unidad || '', precio:l.precio, importe:l.importe, lote:l.lote || '', caducidad:validIso(l.caducidad) ? l.caducidad : '', fotoEnvase:fe, agotado:!!l.agotado});
+    }
+    const doc = {tipo:d.tipo, proveedorId:provId, numero:d.numero, fecha:d.fecha, total:d.total, fotos, lineas, creado:d.creado || Date.now(), actualizado:Date.now()};
+    await Store.save('documentos', d.id, doc);
+    closeSheet(); toast('Guardado en ' + provName(provId));
+  } catch(e){
+    btn.disabled = false; btn.textContent = 'Guardar';
+    toast('No se pudo guardar: ' + ((e && e.message) || 'error') + '. Inténtalo de nuevo.', 6000);
+  }
+}
+async function borrarDoc(){
+  if (!confirm('¿Eliminar este documento y todos sus productos?')) return;
+  await Store.del('documentos', EDIT.draft.id); closeSheet(); toast('Documento eliminado');
+}
+
+/* ===== Vista: Lotes ===== */
+let LFILTRO = 'pendientes', LBUSCA = '';
+function vLotes(){
+  return `<h2>Lotes y caducidades</h2>
+    <div class="field"><label for="lBusca">Buscar producto, lote o proveedor</label><input id="lBusca" type="search" value="${esc(LBUSCA)}" oninput="LBUSCA=this.value;pintarLotes()"></div>
+    <div class="chips">${[['pendientes','En almacén'],['sinlote','Sin lote'],['todos','Todos']].map(([k, l]) => `<button class="chip ${LFILTRO === k ? 'on' : ''}" onclick="LFILTRO='${k}';render()">${l}</button>`).join('')}</div>
+    <div class="list" id="lList"></div>`;
+}
+function pintarLotes(){
+  const box = $('#lList'); if (!box) return;
+  const q = norm(LBUSCA);
+  let ls = todasLineas();
+  if (LFILTRO === 'pendientes') ls = ls.filter(l => !l.agotado);
+  if (LFILTRO === 'sinlote') ls = ls.filter(l => !l.agotado && !l.lote);
+  if (q) ls = ls.filter(l => norm(l.producto + ' ' + l.lote + ' ' + l.proveedor).includes(q));
+  ls.sort((a, b) => (a.caducidad || '9999') .localeCompare(b.caducidad || '9999') || (b.fecha || '').localeCompare(a.fecha || ''));
+  if (!ls.length){ box.innerHTML = `<div class="empty">${Object.keys(S.documentos).length ? 'No hay productos con este filtro.' : 'Aún no hay productos. Escanea tu primera factura o albarán.'}</div>`; return; }
+  box.innerHTML = ls.slice(0, 300).map(l => `<div class="item" style="cursor:default">
+    <div class="row" style="justify-content:space-between"><span class="t">${esc(l.producto)}</span>${l.agotado ? '<span class="badge grey">Gastado</span>' : cadBadge(l.caducidad)}</div>
+    <div class="m">${l.lote ? `<span class="lote">L ${esc(l.lote)}</span> ` : 'Sin lote · '}${esc(l.proveedor)} · comprado el ${fdate(l.fecha)}${l.cantidad != null ? ' · ' + qty(l.cantidad) + ' ' + esc(l.unidad || '') : ''}</div>
+    <div class="row" style="margin-top:.5rem"><button class="btn small" onclick="abrirDoc('${l.docId}')">Abrir documento</button><button class="btn small" onclick="toggleAgotado('${l.docId}',${l.idx})">${l.agotado ? 'Volver a almacén' : 'Marcar gastado'}</button></div></div>`).join('');
+}
+async function toggleAgotado(docId, idx){
+  const d = JSON.parse(JSON.stringify(S.documentos[docId])); if (!d || !d.lineas[idx]) return;
+  d.lineas[idx].agotado = !d.lineas[idx].agotado; d.actualizado = Date.now();
+  await Store.save('documentos', docId, d);
+}
+
+/* ===== Vista: Proveedores ===== */
+function vProveedores(){
+  const docs = Object.entries(S.documentos);
+  const ps = Object.entries(S.proveedores).map(([id, p]) => {
+    const mis = docs.filter(([, d]) => d.proveedorId === id).map(([, d]) => d);
+    return {id, ...p, n:mis.length, gasto:mis.reduce((a, d) => a + docTotal(d), 0), ultimo:mis.map(d => d.fecha || '').sort().pop()};
+  }).sort((a, b) => b.gasto - a.gasto);
+  let h = `<h2>Proveedores</h2>`;
+  if (!ps.length) return h + `<div class="empty">Los proveedores se crean solos al escanear su primera factura o albarán.<div class="row" style="justify-content:center;margin-top:1rem"><button class="btn small" onclick="editProv()">Añadir proveedor a mano</button></div></div>`;
+  h += `<div class="list">${ps.map(p => `<button class="item" onclick="verProv('${p.id}')"><div class="row" style="justify-content:space-between"><span class="t">${esc(p.nombre)}</span><b>${money(p.gasto)}</b></div>
+    <div class="m">${p.n} documento${p.n === 1 ? '' : 's'}${p.ultimo ? ' · último el ' + fdate(p.ultimo) : ''}</div></button>`).join('')}</div>
+    <div class="row" style="margin-top:1rem"><button class="btn small" onclick="editProv()">Añadir proveedor</button></div>`;
+  return h;
+}
+function verProv(id){
+  const p = S.proveedores[id]; if (!p) return;
+  const mis = Object.entries(S.documentos).filter(([, d]) => d.proveedorId === id).sort((a, b) => (b[1].fecha || '').localeCompare(a[1].fecha || ''));
+  openSheet(sheetHead(esc(p.nombre)) +
+    `<p class="note">${p.cif ? 'CIF ' + esc(p.cif) : 'Sin CIF'}${p.telefono ? ' · <a href="tel:' + esc(p.telefono) + '">' + esc(p.telefono) + '</a>' : ''}</p>
+    <div class="row"><button class="btn small" onclick="editProv('${id}')">Editar datos</button></div>
+    <h3 style="margin:1rem 0 .5rem">Facturas y albaranes</h3>
+    <div class="list">${mis.length ? mis.map(([did, d]) => `<button class="item" onclick="abrirDoc('${did}')"><div class="row" style="justify-content:space-between"><span class="t">${d.tipo === 'albaran' ? 'Albarán' : 'Factura'} ${esc(d.numero || '')}</span><b>${money(docTotal(d))}</b></div><div class="m">${fdate(d.fecha)} · ${(d.lineas || []).length} productos</div></button>`).join('') : '<p class="note">Sin documentos.</p>'}</div>`);
+}
+function editProv(id){
+  const p = id ? S.proveedores[id] : {nombre:'', cif:'', telefono:''};
+  openSheet(sheetHead(id ? 'Editar proveedor' : 'Nuevo proveedor') + `
+    <div class="field"><label for="pNom">Nombre</label><input id="pNom" value="${esc(p.nombre)}"></div>
+    <div class="grid2"><div class="field"><label for="pCif">CIF / NIF</label><input id="pCif" value="${esc(p.cif || '')}"></div>
+    <div class="field"><label for="pTel">Teléfono</label><input id="pTel" inputmode="tel" value="${esc(p.telefono || '')}"></div></div>
+    <div class="row" style="margin-top:.8rem"><button class="btn solid grow" onclick="guardarProv('${id || ''}')">Guardar</button>${id ? `<button class="btn danger" onclick="borrarProv('${id}')">Eliminar</button>` : ''}</div>`);
+}
+async function guardarProv(id){
+  const nombre = $('#pNom').value.trim(); if (!nombre) return toast('Escribe el nombre');
+  const nid = id || uid(); const prev = S.proveedores[nid] || {creado:Date.now()};
+  await Store.save('proveedores', nid, {...prev, nombre, cif:$('#pCif').value.trim(), telefono:$('#pTel').value.trim()});
+  verProv(nid);
+}
+async function borrarProv(id){
+  if (Object.values(S.documentos).some(d => d.proveedorId === id)) return toast('Este proveedor tiene documentos. Elimínalos o cámbialos de proveedor antes.', 5000);
+  if (!confirm('¿Eliminar este proveedor?')) return;
+  await Store.del('proveedores', id); closeSheet();
+}
+
+/* ===== Vista: Informes ===== */
+let PERIODO = 90;
+function desdePeriodo(){ return PERIODO ? iso(addDays(today0(), -PERIODO)) : ''; }
+function aggCompras(desde){
+  const map = {}, porProv = {}; let total = 0;
+  for (const d of Object.values(S.documentos)){
+    if (desde && (d.fecha || '') < desde) continue;
+    const pv = provName(d.proveedorId); const t = docTotal(d); total += t; porProv[pv] = (porProv[pv] || 0) + t;
+    (d.lineas || []).forEach(l => {
+      const k = norm(l.producto); if (!k) return;
+      const m = map[k] || (map[k] = {nombre:l.producto, veces:0, cantidad:0, unidad:l.unidad || '', gasto:0, fechas:new Set()});
+      m.veces++; m.cantidad += l.cantidad || 0; m.gasto += lineImporte(l) || 0; if (d.fecha) m.fechas.add(d.fecha);
+    });
+  }
+  const prods = Object.values(map).map(m => {
+    const f = [...m.fechas].sort(); let frec = f.length <= 1 ? (f.length ? '1 compra' : '—') : 'cada ' + Math.max(1, Math.round(diffDays(pd(f[0]), pd(f[f.length - 1])) / (f.length - 1))) + ' días';
+    return {...m, frec};
+  });
+  return {total, porProv, prods};
+}
+function aggVentas(desde){
+  const map = {}; let dias = 0, total = 0;
+  for (const v of Object.values(S.ventas)){
+    if (desde && (v.hasta || '') < desde) continue;
+    dias += Math.max(1, diffDays(pd(v.desde), pd(v.hasta)) + 1);
+    (v.items || []).forEach(it => {
+      const k = norm(it.producto); if (!k) return;
+      const m = map[k] || (map[k] = {nombre:it.producto, cantidad:0, importe:0});
+      m.cantidad += it.cantidad || 0; m.importe += it.importe || 0; total += it.importe || 0;
+    });
+  }
+  const prods = Object.values(map).map(m => { const pdia = dias ? m.cantidad / dias : 0; return {...m, frec: pdia >= 1 ? qty(pdia) + ' al día' : qty(pdia * 7) + ' a la semana'}; });
+  return {dias, total, prods};
+}
+function vInformes(){
+  const desde = desdePeriodo(); const c = aggCompras(desde); const v = aggVentas(desde);
+  let h = `<h2>Informes</h2><div class="chips">${[[30,'30 días'],[90,'3 meses'],[365,'12 meses'],[0,'Todo']].map(([k, l]) => `<button class="chip ${PERIODO === k ? 'on' : ''}" onclick="PERIODO=${k};render()">${l}</button>`).join('')}</div>`;
+  h += `<div class="stats"><div class="stat"><div class="n">${money(c.total)}</div><div class="l">Gastado en compras</div></div><div class="stat"><div class="n">${money(v.total)}</div><div class="l">Vendido (ventas importadas)</div></div></div>`;
+  const pv = Object.entries(c.porProv).sort((a, b) => b[1] - a[1]); const max = pv.length ? pv[0][1] || 1 : 1;
+  h += `<h2>Gasto por proveedor</h2>` + (pv.length ? `<div class="bars">${pv.map(([n, g]) => `<div class="bar"><div class="lab"><span>${esc(n)}</span><b>${money(g)}</b></div><div class="track"><div class="fill" style="width:${Math.max(2, g / max * 100)}%"></div></div></div>`).join('')}</div>` : `<p class="note">Sin compras en este periodo.</p>`);
+  h += `<h2>Lo que más compras</h2>`;
+  h += c.prods.length ? tabla(['Producto','Veces','Cantidad','Gasto','Frecuencia'], c.prods.sort((a, b) => b.gasto - a.gasto || b.veces - a.veces).slice(0, 40).map(p => [esc(p.nombre), p.veces, qty(p.cantidad) + ' ' + esc(p.unidad), money(p.gasto), p.frec]), [1,2,3]) : `<p class="note">Sin compras en este periodo.</p>`;
+  h += `<h2>Lo que más vendes</h2>`;
+  if (v.prods.length) h += `<p class="note">Calculado sobre ${v.dias} día${v.dias === 1 ? '' : 's'} de ventas importadas.</p>` + tabla(['Producto','Unidades','Importe','Ritmo'], v.prods.sort((a, b) => b.cantidad - a.cantidad).slice(0, 40).map(p => [esc(p.nombre), qty(p.cantidad), money(p.importe), p.frec]), [1,2]);
+  else h += `<p class="note">Importa las ventas de tu TPV (foto del informe de ventas por artículo o archivo CSV) para ver qué vendes más.</p>`;
+  h += `<div class="row" style="margin-top:.8rem"><button class="btn solid" onclick="importarVentas(true)">Foto del informe de ventas</button><button class="btn" onclick="importarVentas(false)">Archivo CSV o texto</button></div>`;
+  const imps = Object.entries(S.ventas).sort((a, b) => (b[1].hasta || '').localeCompare(a[1].hasta || ''));
+  if (imps.length) h += `<h3 style="margin:1.2rem 0 .5rem">Ventas importadas</h3><div class="list">${imps.slice(0, 30).map(([id, x]) => `<div class="item" style="cursor:default"><div class="row" style="justify-content:space-between"><span class="t">${x.desde === x.hasta ? fdate(x.desde) : fdate(x.desde) + ' – ' + fdate(x.hasta)}</span><button class="btn small danger" onclick="borrarVentas('${id}')">Borrar</button></div><div class="m">${(x.items || []).length} artículos</div></div>`).join('')}</div>`;
+  return h;
+}
+function tabla(cols, rows, numCols){
+  return `<div class="tablewrap"><table><thead><tr>${cols.map((c, i) => `<th class="${numCols.includes(i) ? 'num' : ''}">${c}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map((x, i) => `<td class="${numCols.includes(i) ? 'num' : ''}">${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+let VENTA = null;
+async function importarVentas(foto){
+  if (!hasKey()){ toast(errMsg({code:'no_key'}), 5000); return abrirAjustes(); }
+  const files = foto ? await pickFiles({camera:true}) : await pickFiles({accept:'.csv,.txt,.tsv,text/csv,text/plain'});
+  if (!files.length) return;
+  openSheet(sheetHead('Importar ventas') + `<div class="busy"><div class="spin"></div><div>Leyendo las ventas… puede tardar hasta un minuto.</div></div>`);
+  try {
+    let r;
+    if (foto){ const b = await compress(files[0]); r = await askJSON(promptVentas(null), [b]); }
+    else { const txt = (await files[0].text()).slice(0, 120000); r = await askJSON(promptVentas(txt)); }
+    const hoy = iso(new Date());
+    VENTA = {desde:validIso(r && r.desde) ? r.desde : hoy, hasta:validIso(r && r.hasta) ? r.hasta : (validIso(r && r.desde) ? r.desde : hoy),
+      items:((r && r.items) || []).filter(x => x && x.producto).map(x => ({producto:String(x.producto), cantidad:num(x.cantidad), importe:num(x.importe)}))};
+    pintarVentas();
+  } catch(e){ closeSheet(); toast(errMsg(e), 6000); }
+}
+function pintarVentas(){
+  openSheet(sheetHead('Revisa las ventas') + `<p class="note">Comprueba las fechas: deben ser los días que cubre el informe.</p>
+    <div class="grid2"><div class="field"><label for="vDesde">Desde</label><input type="date" id="vDesde" value="${VENTA.desde}"></div><div class="field"><label for="vHasta">Hasta</label><input type="date" id="vHasta" value="${VENTA.hasta}"></div></div>
+    <div class="tablewrap"><table><thead><tr><th>Producto</th><th class="num">Uds.</th><th class="num">Importe</th></tr></thead><tbody>${VENTA.items.map(x => `<tr><td>${esc(x.producto)}</td><td class="num">${qty(x.cantidad)}</td><td class="num">${money(x.importe)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="row" style="margin-top:1rem"><button class="btn solid grow" onclick="guardarVentas()" ${VENTA.items.length ? '' : 'disabled'}>Guardar ventas</button></div>`);
+}
+async function guardarVentas(){
+  const desde = $('#vDesde').value, hasta = $('#vHasta').value;
+  if (!validIso(desde) || !validIso(hasta) || hasta < desde) return toast('Revisa las fechas');
+  const solape = Object.values(S.ventas).some(v => !(v.hasta < desde || v.desde > hasta));
+  if (solape && !confirm('Ya tienes ventas importadas de algunos de esos días. Si continúas se sumarán dos veces. ¿Guardar igualmente?')) return;
+  await Store.save('ventas', uid(), {desde, hasta, items:VENTA.items, creado:Date.now()});
+  VENTA = null; closeSheet(); toast('Ventas guardadas');
+}
+async function borrarVentas(id){ if (!confirm('¿Borrar estas ventas importadas?')) return; await Store.del('ventas', id); }
+
+/* ===== Ajustes ===== */
+function abrirAjustes(){
+  openSheet(sheetHead('Ajustes') + `
+    <h3>Lectura de fotos (Google Gemini, gratis)</h3>
+    <p class="note">La app usa la inteligencia artificial gratuita de Google para leer facturas, albaranes y etiquetas. Necesitas una clave gratuita (se crea en 1 minuto con tu cuenta de Google). La clave se guarda solo en este móvil.</p>
+    <div class="field"><label for="aKey">Clave de Gemini</label><input id="aKey" type="password" autocomplete="off" value="${esc(getKey())}" placeholder="Pega aquí la clave (empieza por AIza…)"></div>
+    <div class="row"><button class="btn solid grow" onclick="guardarKey()">Guardar clave</button><button class="btn" onclick="probarKey()" id="aProbar">Probar</button></div>
+    <p class="note"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Abrir Google AI Studio para crear la clave</a></p>
+    <p class="note">${localStorage.getItem('gemini_model') ? 'Modelo en uso: ' + esc(localStorage.getItem('gemini_model')) : ''}</p>
+    <h3 style="margin-top:1.2rem">Tus datos</h3>
+    <p class="note">Todo se guarda en este móvil, sin nube. Descarga una copia de seguridad cada semana y guárdala en tu Google Drive o envíatela por correo.</p>
+    <div class="row"><button class="btn small" onclick="backup()">Descargar copia</button><button class="btn small" onclick="restaurar()">Restaurar copia</button></div>
+    <p class="note" style="margin-top:1rem">Versión ${APP_VERSION}</p>`);
+}
+function guardarKey(){ localStorage.setItem('gemini_key', $('#aKey').value.trim()); localStorage.removeItem('gemini_model'); toast('Clave guardada'); render(); }
+async function probarKey(){
+  guardarKey(); const b = $('#aProbar'); b.disabled = true; b.textContent = 'Probando…';
+  try { const r = await askJSON('Responde solo con este JSON: {"ok":true}'); toast(r && r.ok ? 'La clave funciona' : 'Respuesta rara, pero la clave conecta', 4000); }
+  catch(e){ toast(errMsg(e), 6000); }
+  if (b.isConnected){ b.disabled = false; b.textContent = 'Probar'; }
+}
+
+/* ===== Instalación ===== */
+let INSTALAR = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); INSTALAR = e; render(); });
+window.addEventListener('appinstalled', () => { INSTALAR = null; toast('App instalada'); render(); });
+async function instalar(){ if (!INSTALAR) return; INSTALAR.prompt(); try { await INSTALAR.userChoice; } catch(e){} INSTALAR = null; render(); }
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !/claude|anthropic/.test(location.hostname)){
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+/* ===== Copia de seguridad ===== */
+function descargar(nombre, texto){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([texto], {type:'application/json'})); a.download = nombre;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+async function backup(){
+  try {
+    toast('Preparando la copia…');
+    const fotosBlob = await IDB.all('fotos'); const fotos = {};
+    for (const [id, b] of Object.entries(fotosBlob)) fotos[id] = await blobToDataURL(b);
+    descargar('trazabilidad-' + iso(new Date()) + '.json', JSON.stringify({...S, fotos, version:APP_VERSION}));
+  } catch(e){ toast('No se pudo crear la copia'); }
+}
+function dataURLtoBlob(u){
+  const [h, d] = u.split(','); const mime = (h.match(/data:([^;]+)/) || [])[1] || 'image/jpeg';
+  const bin = atob(d); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], {type:mime});
+}
+async function restaurar(){
+  const files = await pickFiles({accept:'.json,application/json'}); if (!files.length) return;
+  try {
+    const data = JSON.parse(await files[0].text());
+    if (!confirm('Se añadirán los datos de la copia a los actuales (los que tengan el mismo identificador se sustituyen). ¿Continuar?')) return;
+    for (const [id, u] of Object.entries(data.fotos || {})) if (String(u).startsWith('data:')) await IDB.put('fotos', id, dataURLtoBlob(u));
+    for (const c of COLS) for (const [id, v] of Object.entries(data[c] || {})) await Store.save(c, id, v);
+    toast('Copia restaurada');
+  } catch(e){ toast('Ese archivo no es una copia válida'); }
+}
+
+/* ===== Arranque ===== */
+render();
+Store.init();
+</script>
+</body>
+</html>
