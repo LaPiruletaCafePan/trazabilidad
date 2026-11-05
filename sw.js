@@ -1,4 +1,4 @@
-const CACHE = 'trazabilidad-v2';
+const CACHE = 'trazabilidad-v4';
 const FILES = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
@@ -7,7 +7,13 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
-  if (e.request.method !== 'GET' || u.origin !== location.origin) return;
+  if (e.request.method !== 'GET') return;
+  // Programa de Firebase (para que la app abra también sin internet)
+  if (u.hostname === 'www.gstatic.com' && u.pathname.startsWith('/firebasejs/')){
+    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => { const copia = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copia)); return res; })));
+    return;
+  }
+  if (u.origin !== location.origin) return;
   e.respondWith(
     fetch(e.request).then(r => { const copia = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copia)); return r; })
       .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))

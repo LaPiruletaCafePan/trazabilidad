@@ -129,6 +129,7 @@ tr:last-child td{border-bottom:0}
 <body>
 <header class="top">
   <div class="grow"><h1>Trazabilidad</h1><div class="sub">La Piruleta Café Pan</div></div>
+  <span id="sync" class="badge grey" style="display:none"></span>
   <button class="btn small" onclick="abrirAjustes()" aria-label="Ajustes">Ajustes</button>
 </header>
 <main class="wrap" id="app"></main>
@@ -162,7 +163,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '1.1';
+const APP_VERSION = '2.0';
 const COLS = ['proveedores','documentos','ventas','temporada'];
 const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}};
 let pendingRender = false, LISTO = false;
@@ -194,10 +195,174 @@ const Store = {
       if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     } catch(e){ toast('No se pudo abrir el almacenamiento del móvil: ' + (e && e.message || 'error'), 6000); }
     LISTO = true; render();
+    fbInit();
   },
-  async save(c, id, data){ S[c][id] = data; await IDB.put(c, id, data); render(); },
-  async del(c, id){ delete S[c][id]; await IDB.del(c, id); render(); }
+  async save(c, id, data){
+    data = JSON.parse(JSON.stringify(data));
+    S[c][id] = data; await IDB.put(c, id, data); render();
+    if (fbActivo()) FB.mod.setDoc(FB.mod.doc(fbCol(c), id), data).catch(e => { addPend(c, id); fbError(e); });
+    else if (leerCfg()) addPend(c, id);
+  },
+  async del(c, id){
+    delete S[c][id]; await IDB.del(c, id); render();
+    if (fbActivo()) FB.mod.deleteDoc(FB.mod.doc(fbCol(c), id)).catch(e => { addPend(c, id); fbError(e); });
+    else if (leerCfg()) addPend(c, id);
+  }
 };
+
+/* ===== Sincronización con Firebase (cuenta de Google) ===== */
+const FBV = '10.12.2';
+const FB = {cfg:null, mod:null, app:null, auth:null, db:null, user:null, unsubs:[], estado:'off', error:'', primeros:null, sincronizando:false};
+const fbActivo = () => FB.estado === 'conectado' && !!FB.db;
+function leerCfg(){ try { return JSON.parse(localStorage.getItem('fb_cfg') || 'null'); } catch(e){ return null; } }
+function parseCfg(t){
+  const o = {}; String(t || '').replace(/["']?(\w+)["']?\s*:\s*["']([^"']+)["']/g, (m, k, v) => { o[k] = v; return m; });
+  if (!o.apiKey || !o.projectId || !o.appId) return null;
+  return {apiKey:o.apiKey, authDomain:o.authDomain || (o.projectId + '.firebaseapp.com'), projectId:o.projectId, storageBucket:o.storageBucket || '', messagingSenderId:o.messagingSenderId || '', appId:o.appId};
+}
+function leerPend(){ try { return new Set(JSON.parse(localStorage.getItem('fb_pend') || '[]')); } catch(e){ return new Set(); } }
+function addPend(c, id){ const p = leerPend(); p.add(c + '/' + id); localStorage.setItem('fb_pend', JSON.stringify([...p])); }
+function fbCol(c){ return FB.mod.collection(FB.db, 'negocios', 'lapiruleta', c); }
+function fbError(e){
+  const code = e && e.code || '';
+  if (code === 'permission-denied') FB.error = 'Tu cuenta' + (FB.user ? ' (' + FB.user.email + ')' : '') + ' no tiene permiso. Revisa las reglas de Firestore.';
+  else FB.error = 'Error de sincronización: ' + ((e && e.message) || code || 'desconocido');
+  FB.estado = 'error'; pintaSync();
+}
+function pintaSync(){
+  const el = $('#sync'); if (!el) return;
+  let t = '', cl = 'grey';
+  if (FB.estado === 'off'){ el.style.display = 'none'; }
+  else {
+    el.style.display = '';
+    if (FB.estado === 'cargando'){ t = 'Conectando…'; }
+    else if (FB.estado === 'sinsesion'){ t = 'Sin sesión'; cl = 'amber'; }
+    else if (FB.estado === 'error'){ t = 'Error nube'; cl = 'red'; }
+    else if (!navigator.onLine){ t = 'Sin internet'; cl = 'amber'; }
+    else if (FB.sincronizando){ t = 'Subiendo…'; }
+    else { t = 'Sincronizado'; cl = 'green'; }
+    el.textContent = t; el.className = 'badge ' + cl;
+  }
+  const est = $('#syncEstado'); if (est) est.innerHTML = textoEstadoSync();
+}
+window.addEventListener('online', () => { pintaSync(); if (fbActivo() && (leerPend().size || !localStorage.getItem('fb_migrado_' + FB.cfg.projectId))) fbPonerAlDia(); });
+window.addEventListener('offline', pintaSync);
+function textoEstadoSync(){
+  if (!leerCfg()) return 'Sin configurar. Los datos solo están en este móvil.';
+  if (FB.estado === 'cargando') return 'Conectando con la nube…';
+  if (FB.estado === 'sinsesion') return 'Configurada. Falta entrar con tu cuenta de Google.';
+  if (FB.estado === 'error') return '<span style="color:var(--stamp)">' + esc(FB.error) + '</span>';
+  if (FB.estado === 'conectado') return 'Conectado como <b>' + esc(FB.user && FB.user.email) + '</b>. Todo se sincroniza solo.' + (FB.sincronizando ? ' Subiendo datos…' : '');
+  return '';
+}
+async function fbInit(){
+  FB.cfg = leerCfg(); if (!FB.cfg){ FB.estado = 'off'; pintaSync(); return; }
+  FB.estado = 'cargando'; pintaSync();
+  try {
+    const base = 'https://www.gstatic.com/firebasejs/' + FBV + '/';
+    const [a, au, fs] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
+    FB.mod = Object.assign({}, a, au, fs);
+    FB.app = a.initializeApp(FB.cfg);
+    FB.auth = au.getAuth(FB.app);
+    try { FB.db = fs.initializeFirestore(FB.app, {localCache:fs.persistentLocalCache({tabManager:fs.persistentMultipleTabManager()})}); }
+    catch(e){ FB.db = fs.getFirestore(FB.app); }
+    au.onAuthStateChanged(FB.auth, u => {
+      FB.user = u;
+      if (u) fbConectar();
+      else { fbDesconectar(); FB.estado = 'sinsesion'; pintaSync(); render(); }
+    });
+  } catch(e){
+    FB.estado = 'error'; FB.error = 'No se pudo cargar la sincronización. Comprueba internet y vuelve a abrir la app. Mientras tanto, lo que guardes se subirá después.';
+    pintaSync();
+  }
+}
+function fbDesconectar(){ FB.unsubs.forEach(u => { try { u(); } catch(e){} }); FB.unsubs = []; }
+function fbConectar(){
+  fbDesconectar(); FB.estado = 'conectado'; FB.error = ''; FB.primeros = new Set(); pintaSync();
+  COLS.forEach(c => {
+    FB.unsubs.push(FB.mod.onSnapshot(fbCol(c), snap => {
+      snap.docChanges().forEach(ch => {
+        const id = ch.doc.id;
+        if (ch.type === 'removed'){ delete S[c][id]; IDB.del(c, id).catch(() => {}); }
+        else { const v = ch.doc.data(); S[c][id] = v; IDB.put(c, id, v).catch(() => {}); }
+      });
+      if (FB.estado === 'error'){ FB.estado = 'conectado'; FB.error = ''; pintaSync(); }
+      if (!FB.primeros.has(c)){ FB.primeros.add(c); if (FB.primeros.size === COLS.length) fbPonerAlDia(); }
+      render();
+    }, fbError));
+  });
+}
+async function subirFoto(id, blob){
+  let u = await blobToDataURL(blob);
+  if (u.length > 900000) u = await blobToDataURL(await compress(blob, 1200, 0.6));
+  if (u.length > 900000) u = await blobToDataURL(await compress(blob, 900, 0.5));
+  await FB.mod.setDoc(FB.mod.doc(fbCol('fotos'), id), {data:u, creado:Date.now()});
+}
+// Pone al día la nube con lo de este móvil: la primera vez sube todo; después, solo lo que se cambió sin conexión.
+async function fbPonerAlDia(){
+  if (!fbActivo() || FB.sincronizando) return;
+  FB.sincronizando = true; pintaSync();
+  const clave = 'fb_migrado_' + FB.cfg.projectId;
+  const primera = !localStorage.getItem(clave);
+  const pend = leerPend();
+  try {
+    let subidos = 0;
+    for (const c of COLS){
+      let enNube;
+      try { const snap = await FB.mod.getDocsFromServer(fbCol(c)); enNube = new Set(snap.docs.map(d => d.id)); }
+      catch(e){ if (e && e.code === 'permission-denied') throw e; FB.sincronizando = false; pintaSync(); return; }
+      for (const id of Object.keys(S[c])){
+        if (enNube.has(id) && !pend.has(c + '/' + id)) continue;
+        if (!enNube.has(id) && !primera && !pend.has(c + '/' + id)){ delete S[c][id]; await IDB.del(c, id); continue; }
+        await FB.mod.setDoc(FB.mod.doc(fbCol(c), id), JSON.parse(JSON.stringify(S[c][id]))); subidos++;
+      }
+      for (const k of pend){
+        const [pc, pid] = k.split('/');
+        if (pc === c && !S[c][pid] && enNube.has(pid)) await FB.mod.deleteDoc(FB.mod.doc(fbCol(c), pid));
+      }
+    }
+    const fotos = await IDB.all('fotos');
+    for (const [id, blob] of Object.entries(fotos)){
+      if (!primera && !pend.has('fotos/' + id)) continue;
+      if (primera){ const ex = await FB.mod.getDocFromServer(FB.mod.doc(fbCol('fotos'), id)).catch(() => null); if (ex && ex.exists()) continue; }
+      await subirFoto(id, blob); subidos++;
+      if (subidos % 5 === 0) toast('Subiendo a la nube… ' + subidos);
+    }
+    localStorage.setItem(clave, '1'); localStorage.setItem('fb_pend', '[]');
+    if (subidos) toast('Datos de este móvil subidos a la nube (' + subidos + ')');
+    render();
+  } catch(e){ fbError(e); }
+  FB.sincronizando = false; pintaSync();
+}
+async function entrarGoogle(){
+  if (!FB.auth) return toast('La sincronización aún no está lista. Espera unos segundos.');
+  try {
+    const p = new FB.mod.GoogleAuthProvider(); p.setCustomParameters({prompt:'select_account'});
+    await FB.mod.signInWithPopup(FB.auth, p);
+    toast('Sesión iniciada');
+  } catch(e){
+    const c = e && e.code || '';
+    if (c === 'auth/unauthorized-domain') toast('Falta añadir lapiruletacafepan.github.io en Authentication → Configuración → Dominios autorizados.', 8000);
+    else if (c === 'auth/operation-not-allowed') toast('Activa el acceso con Google en Firebase: Authentication → Método de acceso → Google.', 8000);
+    else if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') toast('Inicio de sesión cancelado');
+    else if (c === 'auth/popup-blocked') toast('El navegador bloqueó la ventana. Vuelve a pulsar «Entrar con Google».', 6000);
+    else toast('No se pudo entrar: ' + (e && e.message || c), 7000);
+  }
+}
+async function salirGoogle(){
+  if (!confirm('¿Cerrar sesión? Los datos seguirán en este móvil y se subirán cuando vuelvas a entrar.')) return;
+  try { await FB.mod.signOut(FB.auth); } catch(e){}
+}
+function guardarCfg(){
+  const cfg = parseCfg($('#fbCfg').value);
+  if (!cfg) return toast('No reconozco esa configuración. Copia el bloque completo «const firebaseConfig = { … }».', 6000);
+  localStorage.setItem('fb_cfg', JSON.stringify(cfg));
+  toast('Configuración guardada. Reiniciando…'); setTimeout(() => location.reload(), 800);
+}
+function quitarCfg(){
+  if (!confirm('¿Quitar la sincronización de este móvil? Los datos se quedan en el móvil y en la nube.')) return;
+  localStorage.removeItem('fb_cfg'); location.reload();
+}
 
 /* ===== Fotos ===== */
 async function loadImg(file){
@@ -213,7 +378,10 @@ async function compress(file, max = 1600, q = 0.82){
 }
 const blobToDataURL = b => new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
 async function guardarFoto(blob){
-  const id = uid(); await IDB.put('fotos', id, blob); return 'idb:' + id;
+  const id = uid(); await IDB.put('fotos', id, blob);
+  if (fbActivo()) subirFoto(id, blob).catch(() => addPend('fotos', id));
+  else if (leerCfg()) addPend('fotos', id);
+  return 'idb:' + id;
 }
 const FOTOURL = {};
 async function fotoURL(ref){
@@ -221,6 +389,12 @@ async function fotoURL(ref){
   if (!ref.startsWith('idb:')) return ref;
   const id = ref.slice(4); if (FOTOURL[id]) return FOTOURL[id];
   try { const b = await IDB.get('fotos', id); if (b){ FOTOURL[id] = URL.createObjectURL(b); return FOTOURL[id]; } } catch(e){}
+  if (fbActivo()){
+    try {
+      const d = await FB.mod.getDoc(FB.mod.doc(fbCol('fotos'), id));
+      if (d.exists() && d.data().data){ const b = dataURLtoBlob(d.data().data); await IDB.put('fotos', id, b); FOTOURL[id] = URL.createObjectURL(b); return FOTOURL[id]; }
+    } catch(e){}
+  }
   return '';
 }
 function hidratarFotos(root){
@@ -459,7 +633,7 @@ function vInicio(){
     });
     h += `<button class="btn small" onclick="verTemporadas()">Ver y editar fechas de temporada</button>`;
   }
-  h += `<div class="foot"><button class="btn small" onclick="backup()">Descargar copia de seguridad</button><button class="btn small" onclick="restaurar()">Restaurar copia</button></div><p class="note">Versión ${APP_VERSION}. Los datos y fotos se guardan en este móvil.</p>`;
+  h += `<div class="foot"><button class="btn small" onclick="backup()">Descargar copia de seguridad</button><button class="btn small" onclick="restaurar()">Restaurar copia</button></div><p class="note">Versión ${APP_VERSION}. ${leerCfg() ? 'Sincronización con la nube activada.' : 'Los datos y fotos se guardan en este móvil.'}</p>`;
   return h;
 }
 async function cargarTipicas(){
@@ -548,6 +722,19 @@ function nuevoManual(){
 
 /* ===== Editor de documento ===== */
 let EDIT = null;
+const normNum = v => norm(v).replace(/ /g, '').replace(/^0+/, '');
+function buscarDuplicado(d, provId){
+  if (!provId || provId === '__new') return null;
+  const n = normNum(d.numero); const tot = num(d.total);
+  for (const [id, x] of Object.entries(S.documentos)){
+    if (id === d.id || x.proveedorId !== provId) continue;
+    const xn = normNum(x.numero);
+    if (n && xn){ if (n === xn && (x.tipo || 'factura') === d.tipo) return {id, ...x}; continue; }
+    if (x.fecha === d.fecha && tot != null && x.total != null && Math.abs(x.total - tot) < 0.01) return {id, ...x};
+  }
+  return null;
+}
+function verDuplicado(id){ closeSheet(); abrirDoc(id); }
 function abrirDoc(id){
   const d = S.documentos[id]; if (!d) return;
   abrirEditor(JSON.parse(JSON.stringify({id, ...d, proveedorNuevo:'', cif:'', telefono:''})), [], false);
@@ -558,7 +745,10 @@ function pintarEditor(){
   const provs = Object.entries(S.proveedores).sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
   const fotos = [...(d.fotos || []).map(ref => ({ref})), ...EDIT.blobs.map(b => ({src:URL.createObjectURL(b)}))];
   let h = sheetHead(EDIT.nuevo ? 'Revisa los datos' : (d.tipo === 'albaran' ? 'Albarán' : 'Factura'));
-  if (EDIT.nuevo) h += `<p class="note">Comprueba lo que se ha leído y corrige lo que haga falta antes de guardar.</p>`;
+  const dup = buscarDuplicado(d, d.proveedorId);
+  if (dup) h += `<div class="banner stamp"><b>Este documento ya está guardado.</b><br>${dup.tipo === 'albaran' ? 'Albarán' : 'Factura'} ${esc(dup.numero || '')} de ${esc(provName(dup.proveedorId))}, del ${fdate(dup.fecha)}, por ${money(docTotal(dup))}. No se guardará otra vez.
+    <div class="row" style="margin-top:.6rem"><button class="btn small danger" onclick="closeSheet();toast('Duplicado descartado')">Descartar</button><button class="btn small" onclick="verDuplicado('${dup.id}')">Ver el guardado</button></div></div>`;
+  else if (EDIT.nuevo) h += `<p class="note">Comprueba lo que se ha leído y corrige lo que haga falta antes de guardar.</p>`;
   if (fotos.length) h += `<div class="thumbs">${fotos.map(f => f.ref ? `<img data-foto="${esc(f.ref)}" alt="Documento" onclick="verFoto(this.src)">` : `<img src="${esc(f.src)}" alt="Documento" onclick="verFoto(this.src)">`).join('')}</div>`;
   h += `<div class="grid2">
     <div class="field"><label for="eTipo">Tipo</label><select id="eTipo"><option value="factura" ${d.tipo === 'factura' ? 'selected' : ''}>Factura</option><option value="albaran" ${d.tipo === 'albaran' ? 'selected' : ''}>Albarán</option></select></div>
@@ -647,9 +837,11 @@ async function guardarDoc(){
       const ex = findProv(nombre, d.cif);
       if (ex) provId = ex.id; else { provId = uid(); await Store.save('proveedores', provId, {nombre, cif:(d.cif || '').trim(), telefono:(d.telefono || '').trim(), creado:Date.now()}); }
     }
-    if (EDIT.nuevo && d.numero){
-      const dup = Object.values(S.documentos).find(x => x.proveedorId === provId && norm(x.numero) === norm(d.numero));
-      if (dup && !confirm('Ya tienes guardado un documento de este proveedor con el número ' + d.numero + '. ¿Guardarlo otra vez?')){ btn.disabled = false; btn.textContent = 'Guardar'; return; }
+    const dup = buscarDuplicado(d, provId);
+    if (dup){
+      d.proveedorId = provId;
+      pintarEditor();
+      return toast('Este documento ya estaba guardado (' + (dup.numero ? 'nº ' + dup.numero + ', ' : '') + fdate(dup.fecha) + '). No se ha guardado otra vez.', 6000);
     }
     const fotos = [...(d.fotos || [])];
     for (const b of EDIT.blobs) fotos.push(await guardarFoto(b));
@@ -838,8 +1030,15 @@ function abrirAjustes(){
     <div class="row"><button class="btn solid grow" onclick="guardarKey()">Guardar clave</button><button class="btn" onclick="probarKey()" id="aProbar">Probar</button></div>
     <p class="note"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Abrir Google AI Studio para crear la clave</a></p>
     <p class="note">${localStorage.getItem('gemini_model') ? 'Modelo en uso: ' + esc(localStorage.getItem('gemini_model')) : ''}</p>
+    <h3 style="margin-top:1.2rem">Sincronización entre móviles</h3>
+    <p class="note" id="syncEstado">${textoEstadoSync()}</p>
+    ${leerCfg() ? `<div class="row">
+        ${FB.estado === 'conectado' || FB.estado === 'error' && FB.user ? `<button class="btn small" onclick="fbPonerAlDia()">Sincronizar ahora</button><button class="btn small" onclick="salirGoogle()">Cerrar sesión</button>` : `<button class="btn small solid" onclick="entrarGoogle()">Entrar con Google</button>`}
+        <button class="btn small danger" onclick="quitarCfg()">Quitar</button></div>`
+      : `<div class="field"><label for="fbCfg">Configuración de Firebase</label><textarea id="fbCfg" rows="6" placeholder="Pega aquí el bloque const firebaseConfig = { … }"></textarea></div>
+        <button class="btn small solid" onclick="guardarCfg()">Guardar configuración</button>`}
     <h3 style="margin-top:1.2rem">Tus datos</h3>
-    <p class="note">Todo se guarda en este móvil, sin nube. Descarga una copia de seguridad cada semana y guárdala en tu Google Drive o envíatela por correo.</p>
+    <p class="note">${leerCfg() ? 'Tus datos están en este móvil y en tu nube de Firebase. La copia de seguridad es un extra por si acaso.' : 'Todo se guarda en este móvil, sin nube. Descarga una copia de seguridad cada semana y guárdala en tu Google Drive o envíatela por correo.'}</p>
     <div class="row"><button class="btn small" onclick="backup()">Descargar copia</button><button class="btn small" onclick="restaurar()">Restaurar copia</button></div>
     <p class="note" style="margin-top:1rem">Versión ${APP_VERSION}</p>`);
 }
@@ -883,7 +1082,10 @@ async function restaurar(){
   try {
     const data = JSON.parse(await files[0].text());
     if (!confirm('Se añadirán los datos de la copia a los actuales (los que tengan el mismo identificador se sustituyen). ¿Continuar?')) return;
-    for (const [id, u] of Object.entries(data.fotos || {})) if (String(u).startsWith('data:')) await IDB.put('fotos', id, dataURLtoBlob(u));
+    for (const [id, u] of Object.entries(data.fotos || {})) if (String(u).startsWith('data:')){
+      const b = dataURLtoBlob(u); await IDB.put('fotos', id, b);
+      if (fbActivo()) await subirFoto(id, b).catch(() => addPend('fotos', id)); else if (leerCfg()) addPend('fotos', id);
+    }
     for (const c of COLS) for (const [id, v] of Object.entries(data[c] || {})) await Store.save(c, id, v);
     toast('Copia restaurada');
   } catch(e){ toast('Ese archivo no es una copia válida'); }
