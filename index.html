@@ -171,14 +171,14 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '3.0';
-const COLS = ['proveedores','documentos','ventas','temporada'];
-const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}};
+const APP_VERSION = '3.1';
+const COLS = ['proveedores','documentos','ventas','temporada','equivalencias'];
+const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}, equivalencias:{}};
 let pendingRender = false, LISTO = false;
 const IDB = {
   db:null,
   open(){ return new Promise((res, rej) => {
-    const r = indexedDB.open('trazabilidad', 1);
+    const r = indexedDB.open('trazabilidad', 2);
     r.onupgradeneeded = () => { const d = r.result; [...COLS, 'fotos'].forEach(n => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n); }); };
     r.onsuccess = () => { this.db = r.result; res(); }; r.onerror = () => rej(r.error);
   }); },
@@ -1435,7 +1435,7 @@ function aggVentas(desde){
     dias += Math.max(1, diffDays(pd(v.desde), pd(v.hasta)) + 1);
     (v.items || []).forEach(it => {
       const k = norm(it.producto); if (!k) return;
-      const m = map[k] || (map[k] = {nombre:it.producto, cantidad:0, importe:0});
+      const m = map[k] || (map[k] = {key:k, nombre:it.producto, cantidad:0, importe:0});
       m.cantidad += it.cantidad || 0; m.importe += it.importe || 0; total += it.importe || 0;
     });
   }
@@ -1451,11 +1451,161 @@ function vInformes(){
   h += `<h2>Lo que más compras</h2>`;
   h += c.prods.length ? tabla(['Producto','Veces','Cantidad','Gasto','Frecuencia'], c.prods.sort((a, b) => b.gasto - a.gasto || b.veces - a.veces).slice(0, 40).map(p => [esc(p.nombre), p.veces, qty(p.cantidad) + ' ' + esc(p.unidad), money(p.gasto), p.frec]), [1,2,3]) : `<p class="note">Sin compras en este periodo.</p>`;
   h += `<h2>Lo que más vendes</h2>`;
-  if (v.prods.length) h += `<p class="note">Calculado sobre ${v.dias} día${v.dias === 1 ? '' : 's'} de ventas importadas.</p>` + tabla(['Producto','Unidades','Importe','Ritmo'], v.prods.sort((a, b) => b.cantidad - a.cantidad).slice(0, 40).map(p => [esc(p.nombre), qty(p.cantidad), money(p.importe), p.frec]), [1,2]);
+  const EQ = equivMapa();
+  if (v.prods.length) h += `<p class="note">Calculado sobre ${v.dias} día${v.dias === 1 ? '' : 's'} de ventas.</p>` + tabla(['Artículo (TPV)','Unidades','Importe','Ritmo','Producto de compra'], v.prods.sort((a, b) => b.cantidad - a.cantidad).slice(0, 40).map(p => { const e = EQ[p.key]; return [esc(p.nombre), qty(p.cantidad), money(p.importe), p.frec, e ? (e.sinCompra ? '<span class="badge grey">Sin compra</span>' : (e.compras || []).map(c => esc(c.nombre)).join(' + ') || '<span class="badge amber">Sin enlazar</span>') : '<span class="badge amber">Sin enlazar</span>']; }), [1,2]);
   else h += `<p class="note">Importa las ventas de tu TPV (foto del informe de ventas por artículo o archivo CSV) para ver qué vendes más.</p>`;
   h += `<div class="row" style="margin-top:.8rem"><button class="btn solid" onclick="importarVentas(true)">Foto del informe de ventas</button><button class="btn" onclick="importarVentas(false)">Archivo CSV o texto</button></div>`;
+  h += `<h2>Equivalencias TPV ↔ compras</h2><p class="note">Relaciona los artículos que vendes en TPV Factu con los productos que compras, aunque se llamen distinto.</p>
+    <div class="row"><button class="btn solid" onclick="verEquivalencias()">Ver equivalencias</button></div>`;
+  h += vComparativa(desde);
   const imps = Object.entries(S.ventas).sort((a, b) => (b[1].hasta || '').localeCompare(a[1].hasta || ''));
-  if (imps.length) h += `<h3 style="margin:1.2rem 0 .5rem">Ventas importadas</h3><div class="list">${imps.slice(0, 30).map(([id, x]) => `<div class="item" style="cursor:default"><div class="row" style="justify-content:space-between"><span class="t">${x.desde === x.hasta ? fdate(x.desde) : fdate(x.desde) + ' – ' + fdate(x.hasta)}</span><button class="btn small danger" onclick="borrarVentas('${id}')">Borrar</button></div><div class="m">${(x.items || []).length} artículos</div></div>`).join('')}</div>`;
+  if (imps.length) h += `<h3 style="margin:1.2rem 0 .5rem">Ventas importadas</h3><div class="list">${imps.slice(0, 30).map(([id, x]) => `<div class="item" style="cursor:default"><div class="row" style="justify-content:space-between"><span class="t">${x.origen === 'tpv' ? 'TPV Factu · ' : ''}${x.desde === x.hasta ? fdate(x.desde) : fdate(x.desde) + ' – ' + fdate(x.hasta)}</span><button class="btn small danger" onclick="borrarVentas('${id}')">Borrar</button></div><div class="m">${(x.items || []).length} artículos</div></div>`).join('')}</div>`;
+  return h;
+}
+/* ===== Equivalencias TPV ↔ compras ===== */
+const eqId = nombre => 'e_' + (norm(nombre).replace(/ /g, '_').slice(0, 120) || uid());
+function equivMapa(){ const m = {}; Object.values(S.equivalencias).forEach(e => { if (e && e.tpv) m[norm(e.tpv)] = e; }); return m; }
+function productosCompra(desde){
+  const map = {};
+  for (const d of Object.values(S.documentos)){
+    if (desde && (d.fecha || '') < desde) continue;
+    (d.lineas || []).forEach(l => {
+      const k = norm(l.producto); if (!k) return;
+      const m = map[k] || (map[k] = {key:k, nombre:l.producto, unidad:l.unidad || '', prov:provName(d.proveedorId), cantidad:0, gasto:0, cantConPrecio:0});
+      m.cantidad += l.cantidad || 0; const imp = lineImporte(l); if (imp != null && l.cantidad){ m.gasto += imp; m.cantConPrecio += l.cantidad; }
+      if (!m.unidad && l.unidad) m.unidad = l.unidad;
+    });
+  }
+  Object.values(map).forEach(m => { m.precioUnit = m.cantConPrecio ? m.gasto / m.cantConPrecio : null; });
+  return map;
+}
+function articulosTPV(){
+  const m = {};
+  Object.values(S.ventas).forEach(v => (v.items || []).forEach(it => { const k = norm(it.producto); if (!k) return; (m[k] = m[k] || {key:k, nombre:it.producto, cantidad:0}).cantidad += it.cantidad || 0; }));
+  Object.values(S.equivalencias).forEach(e => { const k = norm(e.tpv); if (k && !m[k]) m[k] = {key:k, nombre:e.tpv, cantidad:0}; });
+  return Object.values(m).sort((a, b) => b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre));
+}
+function verEquivalencias(){
+  const arts = articulosTPV(), EQ = equivMapa();
+  const sin = arts.filter(a => !EQ[a.key]).length, rev = arts.filter(a => EQ[a.key] && !EQ[a.key].revisado).length;
+  let h = sheetHead('Equivalencias');
+  h += `<p class="note">Para cada artículo del TPV indica qué producto de compra gasta y cuántas ventas salen de 1 unidad de compra (por ejemplo, 1 kg de café ≈ 140 cafés; una caja de 60 napolitanas = 60).</p>`;
+  if (!arts.length) h += `<div class="banner info">Aún no hay ventas. Cuando TPV Factu envíe ventas, o importes la foto de un informe de ventas, aparecerán aquí sus artículos. También puedes añadir uno a mano.</div>`;
+  h += `<div class="row" style="margin:.6rem 0">${sin ? `<button class="btn small solid" id="eqAuto" onclick="proponerEquivalencias()">Proponer con Gemini (${sin})</button>` : ''}${rev ? `<button class="btn small" onclick="darPorBuenas()">Dar por buenas las ${rev} propuestas</button>` : ''}<button class="btn small" onclick="editEquiv()">Añadir artículo a mano</button></div>`;
+  h += `<div class="list">${arts.map(a => { const e = EQ[a.key];
+    const estado = !e ? '<span class="badge amber">Sin enlazar</span>' : (!e.revisado ? '<span class="badge amber">Propuesta: revísala</span>' : (e.sinCompra ? '<span class="badge grey">Sin compra</span>' : '<span class="badge green">Enlazado</span>'));
+    const det = e && !e.sinCompra && (e.compras || []).length ? (e.compras || []).map(c => esc(c.nombre) + (c.rendimiento ? ' (' + qty(c.rendimiento) + ' por ' + esc(c.unidad || 'unidad') + ')' : '')).join(' + ') : (e && e.sinCompra ? 'No gasta ningún producto comprado' : '');
+    return `<button class="item" onclick="editEquiv('${esc(a.key)}')"><div class="row" style="justify-content:space-between"><span class="t">${esc(a.nombre)}</span>${estado}</div><div class="m">${a.cantidad ? qty(a.cantidad) + ' vendidos · ' : ''}${det}</div></button>`; }).join('')}</div>`;
+  openSheet(h);
+}
+let EQE = null;
+function editEquiv(key){
+  const arts = articulosTPV(); const a = key ? arts.find(x => x.key === key) : null;
+  const e = key ? equivMapa()[key] : null;
+  EQE = {nuevo:!key, tpv:a ? a.nombre : '', compras:e ? JSON.parse(JSON.stringify(e.compras || [])) : [], sinCompra:!!(e && e.sinCompra)};
+  if (!EQE.compras.length && !EQE.sinCompra) EQE.compras.push({key:'', nombre:'', unidad:'', rendimiento:null});
+  pintarEquiv();
+}
+function pintarEquiv(){
+  const P = Object.values(productosCompra('')).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  let h = sheetHead(EQE.nuevo ? 'Nuevo artículo del TPV' : 'Equivalencia');
+  h += `<button class="btn small" style="margin-bottom:.6rem" onclick="verEquivalencias()">← Volver a la lista</button>`;
+  h += EQE.nuevo ? `<div class="field"><label for="qTpv">Nombre exacto del artículo en TPV Factu</label><input id="qTpv" value="${esc(EQE.tpv)}"></div>` : `<p><b>${esc(EQE.tpv)}</b> (artículo de TPV Factu)</p>`;
+  h += `<label class="row" style="margin:.4rem 0"><input type="checkbox" id="qSin" ${EQE.sinCompra ? 'checked' : ''} onchange="syncEquiv();EQE.sinCompra=this.checked;pintarEquiv()"> No gasta ningún producto comprado</label>`;
+  if (!EQE.sinCompra){
+    EQE.compras.forEach((c, i) => {
+      const u = (P.find(x => x.key === c.key) || {}).unidad || c.unidad || 'unidad';
+      h += `<div class="line" data-q="${i}"><div class="head"><span>Producto de compra ${i + 1}</span><button class="x" style="font-size:1.2rem" onclick="quitarEqLinea(${i})" aria-label="Quitar">×</button></div>
+        <div class="field"><label>Producto que compras</label><select data-k="key" onchange="syncEquiv();pintarEquiv()"><option value="">Elige el producto…</option>${P.map(x => `<option value="${esc(x.key)}" ${x.key === c.key ? 'selected' : ''}>${esc(x.nombre)}${x.unidad ? ' (' + esc(x.unidad) + ')' : ''} · ${esc(x.prov)}</option>`).join('')}</select></div>
+        <div class="field"><label>Ventas que salen de 1 ${esc(u)}</label><input data-k="rendimiento" inputmode="decimal" value="${c.rendimiento ?? ''}" placeholder="Ej.: 1, 60, 140…"></div>${c.estimado ? '<p class="note">Cantidad estimada por Gemini: compruébala.</p>' : ''}</div>`;
+    });
+    h += `<button class="btn small" onclick="syncEquiv();EQE.compras.push({key:'',nombre:'',unidad:'',rendimiento:null});pintarEquiv()">Añadir otro producto (p. ej. café + leche)</button>`;
+  }
+  h += `<div class="row" style="margin-top:1rem"><button class="btn solid grow" onclick="guardarEquiv()">Guardar</button>${!EQE.nuevo && equivMapa()[norm(EQE.tpv)] ? '<button class="btn danger" onclick="borrarEquiv()">Quitar enlace</button>' : ''}</div>`;
+  openSheet(h);
+}
+function syncEquiv(){
+  if (!EQE) return; if ($('#qTpv')) EQE.tpv = $('#qTpv').value.trim();
+  const P = productosCompra('');
+  document.querySelectorAll('#sheetBody [data-q]').forEach(div => {
+    const c = EQE.compras[+div.dataset.q]; if (!c) return;
+    const k = div.querySelector('[data-k="key"]').value; if (k !== c.key) c.estimado = false;
+    c.key = k; c.nombre = P[k] ? P[k].nombre : ''; c.unidad = P[k] ? P[k].unidad : '';
+    const r = num(div.querySelector('[data-k="rendimiento"]').value); if (r !== c.rendimiento) c.estimado = false; c.rendimiento = r;
+  });
+}
+function quitarEqLinea(i){ syncEquiv(); EQE.compras.splice(i, 1); pintarEquiv(); }
+async function guardarEquiv(){
+  syncEquiv(); if (!EQE.tpv) return toast('Escribe el nombre del artículo del TPV');
+  const compras = EQE.sinCompra ? [] : EQE.compras.filter(c => c.key);
+  if (!EQE.sinCompra && !compras.length) return toast('Elige al menos un producto de compra, o marca «No gasta ningún producto comprado»');
+  if (compras.some(c => !(c.rendimiento > 0))) return toast('Pon cuántas ventas salen de 1 unidad de compra');
+  await Store.save('equivalencias', eqId(EQE.tpv), {tpv:EQE.tpv, compras:compras.map(c => ({key:c.key, nombre:c.nombre, unidad:c.unidad || '', rendimiento:c.rendimiento, estimado:!!c.estimado})), sinCompra:EQE.sinCompra, revisado:true, actualizado:Date.now()});
+  toast('Equivalencia guardada'); EQE = null; verEquivalencias();
+}
+async function borrarEquiv(){ if (!confirm('¿Quitar el enlace de este artículo?')) return; await Store.del('equivalencias', eqId(EQE.tpv)); EQE = null; verEquivalencias(); }
+async function darPorBuenas(){
+  for (const [id, e] of Object.entries(S.equivalencias)) if (!e.revisado) await Store.save('equivalencias', id, {...e, revisado:true, actualizado:Date.now()});
+  toast('Propuestas aceptadas'); verEquivalencias();
+}
+async function proponerEquivalencias(){
+  if (!hasKey()){ toast(errMsg({code:'no_key'}), 5000); return abrirAjustes(); }
+  const EQ = equivMapa(); const pend = articulosTPV().filter(a => !EQ[a.key]);
+  const P = Object.values(productosCompra(''));
+  if (!P.length) return toast('Primero escanea alguna factura o albarán: no hay productos de compra para enlazar.');
+  const b = $('#eqAuto'); if (b){ b.disabled = true; b.textContent = 'Pensando… puede tardar un minuto'; }
+  let hechos = 0;
+  try {
+    for (let i = 0; i < pend.length; i += 60){
+      const grupo = pend.slice(i, i + 60);
+      const r = await askJSON(promptEquiv(grupo.map(a => a.nombre), P.map(x => ({producto:x.nombre, unidad:x.unidad || null, proveedor:x.prov}))));
+      const porNombre = {}; P.forEach(x => { porNombre[norm(x.nombre)] = x; });
+      for (const q of ((r && r.equivalencias) || [])){
+        const a = grupo.find(g => g.key === norm(q.tpv)); if (!a) continue;
+        const compras = (Array.isArray(q.compras) ? q.compras : []).map(c => { const x = porNombre[norm(c && c.producto)]; const rd = num(c && c.rendimiento); return x && rd > 0 ? {key:x.key, nombre:x.nombre, unidad:x.unidad || '', rendimiento:rd, estimado:!!c.estimado} : null; }).filter(Boolean);
+        if (!compras.length && !q.sinCompra) continue;
+        await Store.save('equivalencias', eqId(a.nombre), {tpv:a.nombre, compras, sinCompra:!compras.length, revisado:false, actualizado:Date.now()}); hechos++;
+      }
+    }
+    toast(hechos ? hechos + ' propuestas listas. Revísalas y corrige lo que haga falta.' : 'Gemini no encontró equivalencias claras. Añádelas a mano.', 6000);
+  } catch(e){ toast(errMsg(e), 6000); }
+  verEquivalencias();
+}
+function promptEquiv(tpv, compras){
+  return `Eres el asistente de una cafetería-panadería en España (La Piruleta). Casi no compra materias primas: compra bollería congelada y artesana ya terminada (solo hornear, decorar o descongelar), hace tostadas, y compra café en grano por kilos, Colacao, leche, zumos, batidos, refrescos y cervezas.
+Te paso dos listas:
+A) ARTÍCULOS QUE SE VENDEN en el TPV: ${JSON.stringify(tpv)}
+B) PRODUCTOS QUE SE COMPRAN a proveedores, con su unidad de compra: ${JSON.stringify(compras)}
+Para cada artículo de la lista A, indica qué producto o productos de la lista B se gastan al venderlo y su "rendimiento": cuántas unidades del artículo vendido salen de 1 unidad de compra. Ejemplos: 1 kg de café en grano da unas 140 tazas → 140; una caja de 60 napolitanas → 60; una lata de refresco comprada por unidades → 1; un café con leche gasta café (140 por kg) y leche (unos 6 por litro).
+Si la unidad de compra es caja o paquete y no sabes cuántas unidades trae, mira si el nombre lo indica; si no, estima y pon "estimado":true.
+Responde SOLO con un objeto JSON: {"equivalencias":[{"tpv":string (copiado exacto de la lista A),"compras":[{"producto":string (copiado exacto de la lista B),"rendimiento":number,"estimado":boolean}],"sinCompra":boolean}]}
+Reglas:
+- Si un artículo no se corresponde con ningún producto comprado, pon "compras":[] y "sinCompra":true. Si dudas mucho, no lo incluyas.
+- No inventes productos que no estén en la lista B.`;
+}
+function vComparativa(desde){
+  const eqs = Object.values(S.equivalencias).filter(e => !e.sinCompra && (e.compras || []).length);
+  if (!eqs.length) return '';
+  const vMap = {}; aggVentas(desde).prods.forEach(p => { vMap[p.key] = p; });
+  const cPer = productosCompra(desde), cTodo = productosCompra('');
+  const usado = {};
+  eqs.forEach(e => { const v = vMap[norm(e.tpv)]; if (!v) return; e.compras.forEach(c => { if (c.rendimiento > 0) usado[c.key] = (usado[c.key] || 0) + v.cantidad / c.rendimiento; }); });
+  const claves = Object.keys(usado);
+  let h = '';
+  if (claves.length){
+    h += `<h2>Comprado frente a vendido</h2><p class="note">Cuánto has comprado de cada producto en este periodo y cuánto se ha gastado según las ventas. Si sobra mucho puede ser stock en almacén; si falta, mermas, invitaciones o equivalencias mal ajustadas.</p>`;
+    h += tabla(['Producto de compra','Comprado','Gastado en ventas','Diferencia'], claves.sort((a, b) => (usado[b] || 0) - (usado[a] || 0)).map(k => { const p = cPer[k] || cTodo[k] || {nombre:k, unidad:''}; const comp = cPer[k] ? cPer[k].cantidad : 0; const dif = comp - usado[k];
+      return [esc(p.nombre), qty(comp) + ' ' + esc(p.unidad || ''), qty(usado[k]) + ' ' + esc(p.unidad || ''), `<span class="badge ${dif < 0 ? 'red' : 'grey'}">${dif >= 0 ? '+' : ''}${qty(dif)}</span>`]; }), [1,2,3]);
+  }
+  const filas = [];
+  eqs.forEach(e => { const v = vMap[norm(e.tpv)]; if (!v || !v.cantidad || !v.importe) return;
+    let coste = 0, ok = true; e.compras.forEach(c => { const p = cTodo[c.key]; if (!p || p.precioUnit == null || !(c.rendimiento > 0)) ok = false; else coste += p.precioUnit / c.rendimiento; });
+    if (!ok) return; const pv = v.importe / v.cantidad, sinIva = pv / 1.10, mg = sinIva - coste;
+    filas.push({n:e.tpv, pv, coste, mg, pct:sinIva ? mg / sinIva * 100 : 0}); });
+  if (filas.length){
+    h += `<h2>Coste y margen por artículo</h2><p class="note">Precio medio de venta en el TPV y coste de lo que gasta según tus facturas. El margen descuenta el 10% de IVA de la venta.</p>`;
+    h += tabla(['Artículo (TPV)','Precio venta','Coste','Margen'], filas.sort((a, b) => b.mg - a.mg).map(f => [esc(f.n), money(f.pv), money(f.coste), money(f.mg) + ' (' + Math.round(f.pct) + '%)']), [1,2,3]);
+  }
   return h;
 }
 function tabla(cols, rows, numCols){
