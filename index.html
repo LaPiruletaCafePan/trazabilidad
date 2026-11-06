@@ -163,7 +163,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '2.1';
+const APP_VERSION = '2.2';
 const COLS = ['proveedores','documentos','ventas','temporada'];
 const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}};
 let pendingRender = false, LISTO = false;
@@ -451,10 +451,11 @@ function parseJSONTolerante(t){
   if (i >= 0 && j > i){ try { return JSON.parse(t.slice(i, j + 1)); } catch(e){} }
   throw {code:'invalid_json'};
 }
-async function askJSON(prompt, images){
+async function askJSON(prompt, images, numerar){
   const key = getKey(); if (!key) throw {code:'no_key'};
   const parts = [{text:prompt}];
-  for (const b of images || []) parts.push({inline_data:{mime_type:'image/jpeg', data:await blobToB64(b)}});
+  let nf = 0;
+  for (const b of images || []){ if (numerar) parts.push({text:'Foto ' + (++nf) + ':'}); parts.push({inline_data:{mime_type:'image/jpeg', data:await blobToB64(b)}}); }
   const body = JSON.stringify({contents:[{role:'user', parts}], generationConfig:{temperature:0, responseMimeType:'application/json'}});
   const guardado = localStorage.getItem('gemini_model');
   const modelos = guardado ? [guardado, ...GEMINI_MODELOS.filter(m => m !== guardado)] : GEMINI_MODELOS;
@@ -493,6 +494,22 @@ Reglas:
 - Números con punto decimal, sin símbolo de euro. "precio" es el precio por unidad sin IVA si se ve; "importe" es el total de esa línea.
 - "producto": nombre legible del artículo, sin códigos internos.
 - "unidad": ud, caja, kg, l, paquete… según figure.
+- Si el documento indica lote o caducidad por línea, inclúyelos; si no, null.
+- "total" es el importe total a pagar con IVA.
+- Si un dato no aparece, pon null. No inventes nada.
+Proveedores ya registrados (si es uno de ellos, usa EXACTAMENTE ese nombre): ${JSON.stringify(provList())}`;
+}
+function promptLote(n){
+  return `Eres el asistente de una cafetería-panadería en España. Te paso ${n} fotos numeradas (Foto 1 a Foto ${n}) de FACTURAS o ALBARANES, normalmente del mismo proveedor.
+Cada foto puede ser un documento distinto o una página más del documento de la foto anterior (por ejemplo «página 2 de 2», o una continuación sin cabecera con el mismo número).
+Agrupa las fotos por documento y extrae los datos de cada documento. Si dos fotos son el MISMO documento fotografiado dos veces, inclúyelo una sola vez con ambas fotos en "paginas".
+Responde SOLO con un objeto JSON con esta forma exacta:
+{"documentos":[{"paginas":[número de foto,...],"tipo":"factura"|"albaran","proveedor":{"nombre":string,"cif":string|null,"telefono":string|null},"numero":string|null,"fecha":"AAAA-MM-DD"|null,"total":number|null,"lineas":[{"producto":string,"cantidad":number|null,"unidad":string|null,"precio":number|null,"importe":number|null,"lote":string|null,"caducidad":"AAAA-MM-DD"|null}]}]}
+Reglas:
+- Cada foto debe aparecer en las "paginas" de exactamente un documento.
+- El proveedor es quien EMITE el documento (no el cliente La Piruleta Café Pan C.B.).
+- Números con punto decimal, sin símbolo de euro. "precio" es el precio por unidad sin IVA si se ve; "importe" es el total de esa línea.
+- "producto": nombre legible del artículo, sin códigos internos. "unidad": ud, caja, kg, l, paquete… según figure.
 - Si el documento indica lote o caducidad por línea, inclúyelos; si no, null.
 - "total" es el importe total a pagar con IVA.
 - Si un dato no aparece, pon null. No inventes nada.
@@ -594,7 +611,7 @@ document.addEventListener('focusout', () => setTimeout(() => { if (pendingRender
 
 /* ===== Hojas (ventanas) ===== */
 function openSheet(html){ $('#sheetBody').innerHTML = html; $('#sheet').classList.remove('hidden'); document.body.style.overflow = 'hidden'; hidratarFotos($('#sheetBody')); }
-function closeSheet(){ $('#sheet').classList.add('hidden'); $('#sheetBody').innerHTML = ''; document.body.style.overflow = ''; EDIT = null; }
+function closeSheet(){ if (EDIT && EDIT.lote != null && $('#eTipo')){ try { syncEditor(); } catch(e){} } $('#sheet').classList.add('hidden'); $('#sheetBody').innerHTML = ''; document.body.style.overflow = ''; EDIT = null; }
 const sheetHead = t => `<div class="sheet-head"><h2 style="margin:0">${t}</h2><button class="x" onclick="closeSheet()" aria-label="Cerrar">×</button></div>`;
 
 /* ===== Lotes: lista de líneas ===== */
@@ -688,13 +705,15 @@ async function guardarTemp(id){
 async function borrarTemp(id){ if (!confirm('¿Eliminar esta fecha de temporada?')) return; await Store.del('temporada', id); verTemporadas(); }
 
 /* ===== Vista: Escanear ===== */
-let PAGINAS = []; let LEYENDO = false;
+let PAGINAS = []; let LEYENDO = false; let LEYENDO_TXT = '';
 function vEscanear(){
   let h = `<h2>Escanear factura o albarán</h2><p class="note">Pon el papel sobre una superficie lisa, con buena luz y entero en la foto. Si tiene varias páginas, añádelas todas antes de leer.</p>`;
   if (PAGINAS.length) h += `<div class="thumbs">${PAGINAS.map((p, i) => `<img src="${p.url}" alt="Página ${i + 1}" onclick="quitarPagina(${i})">`).join('')}</div><p class="note">${PAGINAS.length} página${PAGINAS.length === 1 ? '' : 's'}. Toca una para quitarla.</p>`;
-  if (LEYENDO) return h + `<div class="busy"><div class="spin"></div><div>Leyendo el documento… suele tardar entre 20 y 60 segundos.</div></div>`;
+  if (LEYENDO) return h + `<div class="busy"><div class="spin"></div><div>${esc(LEYENDO_TXT || 'Leyendo el documento… suele tardar entre 20 y 60 segundos.')}</div></div>`;
   h += `<div class="row" style="margin-top:.6rem"><button class="btn solid grow" onclick="addPagina(true)">${PAGINAS.length ? 'Añadir otra página' : 'Hacer foto'}</button><button class="btn grow" onclick="addPagina(false)">Elegir de la galería</button></div>`;
-  if (PAGINAS.length) h += `<button class="scanbig" onclick="leerDocumento()"><b>Leer documento</b><span>Saca proveedor, fecha, productos, cantidades y precios</span></button>`;
+  if (LOTE && LOTE.items.some(it => it.estado === 'pendiente')) h = `<div class="banner warn" style="cursor:pointer" onclick="pintarLote()">Tienes ${LOTE.items.filter(it => it.estado === 'pendiente').length} documentos leídos sin guardar. Toca para verlos.</div>` + h;
+  if (PAGINAS.length) h += `<button class="scanbig" onclick="leerDocumento()"><b>Leer como UN documento</b><span>Todas las fotos son páginas de la misma factura o albarán</span></button>`;
+  if (PAGINAS.length > 1) h += `<button class="scanbig" style="background:var(--card);color:var(--ink);border:2px solid var(--ink)" onclick="leerLote()"><b>Leer como VARIAS facturas</b><span>Cada foto es una factura o albarán distinto del mismo proveedor. La app agrupa sola las que tengan varias páginas.</span></button>`;
   h += `<div class="row" style="margin-top:1rem"><button class="btn small" onclick="nuevoManual()">Introducir a mano</button></div>`;
   return h;
 }
@@ -707,7 +726,7 @@ function quitarPagina(i){ if (confirm('¿Quitar esta página?')){ PAGINAS.splice
 async function leerDocumento(){
   if (!PAGINAS.length || LEYENDO) return;
   if (!hasKey()){ toast(errMsg({code:'no_key'}), 5000); return abrirAjustes(); }
-  LEYENDO = true; render();
+  LEYENDO = true; LEYENDO_TXT = ''; render();
   try {
     const r = await askJSON(promptFactura(), PAGINAS.map(p => p.blob));
     const blobs = PAGINAS.map(p => p.blob);
@@ -730,6 +749,131 @@ function borradorDesde(r){
 function nuevoManual(){
   const blobs = PAGINAS.map(p => p.blob); PAGINAS = []; render();
   abrirEditor({id:uid(), tipo:'albaran', proveedorId:'', proveedorNuevo:'', cif:'', telefono:'', numero:'', fecha:iso(new Date()), total:null, fotos:[], lineas:[]}, blobs, true);
+}
+
+/* ===== Varias facturas a la vez ===== */
+let LOTE = null;
+const TANDA = 6; // fotos por consulta a Gemini
+async function leerLote(){
+  if (PAGINAS.length < 2 || LEYENDO) return;
+  if (!hasKey()){ toast(errMsg({code:'no_key'}), 5000); return abrirAjustes(); }
+  if (LOTE && LOTE.items.some(it => it.estado === 'pendiente') && !confirm('Tienes documentos leídos sin guardar. Si sigues, se perderán. ¿Continuar?')) return;
+  const fotos = PAGINAS.map(p => p.blob);
+  const tandas = []; for (let i = 0; i < fotos.length; i += TANDA) tandas.push(fotos.slice(i, i + TANDA));
+  LEYENDO = true; const items = [];
+  try {
+    for (let t = 0; t < tandas.length; t++){
+      LEYENDO_TXT = 'Leyendo ' + fotos.length + ' fotos' + (tandas.length > 1 ? ' (parte ' + (t + 1) + ' de ' + tandas.length + ')' : '') + '… puede tardar uno o dos minutos.';
+      render();
+      const r = await askJSON(promptLote(tandas[t].length), tandas[t], true);
+      const docs = (r && Array.isArray(r.documentos)) ? r.documentos : [];
+      const usadas = new Set();
+      docs.forEach(dd => {
+        const pags = (Array.isArray(dd.paginas) ? dd.paginas : []).map(n => parseInt(n, 10) - 1).filter(n => n >= 0 && n < tandas[t].length && !usadas.has(n));
+        pags.forEach(n => usadas.add(n));
+        if (!pags.length && !(dd.lineas || []).length && !dd.numero) return;
+        items.push({draft:borradorDesde(dd), blobs:pags.map(n => tandas[t][n]), estado:'pendiente'});
+      });
+      // Fotos que no se asignaron a ningún documento: se añaden como documento aparte para revisar a mano
+      tandas[t].forEach((b, n) => { if (!usadas.has(n)) items.push({draft:borradorDesde({}), blobs:[b], estado:'pendiente', sinLeer:true}); });
+    }
+  } catch(e){ LEYENDO = false; LEYENDO_TXT = ''; render(); return toast(errMsg(e), 6000); }
+  LEYENDO = false; LEYENDO_TXT = ''; PAGINAS = [];
+  // Proveedor común: el más repetido entre los documentos leídos
+  const cuenta = {};
+  items.forEach(it => { const d = it.draft; const k = d.proveedorId && d.proveedorId !== '__new' ? 'id:' + d.proveedorId : (d.proveedorNuevo ? 'n:' + norm(d.proveedorNuevo) : ''); if (k){ cuenta[k] = (cuenta[k] || 0) + 1; } });
+  const top = Object.entries(cuenta).sort((a, b) => b[1] - a[1])[0];
+  let provId = '', provNuevo = '', cif = '', tel = '';
+  if (top){
+    if (top[0].startsWith('id:')) provId = top[0].slice(3);
+    else { const d = items.find(it => it.draft.proveedorNuevo && 'n:' + norm(it.draft.proveedorNuevo) === top[0]).draft; provId = '__new'; provNuevo = d.proveedorNuevo; cif = d.cif; tel = d.telefono; }
+  }
+  LOTE = {provId, provNuevo, cif, tel, items};
+  render(); pintarLote();
+}
+function loteSyncProv(){
+  if (!LOTE || !$('#lProv')) return;
+  LOTE.provId = $('#lProv').value;
+  if ($('#lNuevo')) LOTE.provNuevo = $('#lNuevo').value.trim();
+}
+function loteProvIdFijo(){ if (LOTE.provId === '__new'){ const ex = findProv(LOTE.provNuevo, LOTE.cif); return ex ? ex.id : '__new'; } return LOTE.provId; }
+function mismoDoc(a, b){
+  const na = normNum(a.numero), nb = normNum(b.numero);
+  if (na && nb) return na === nb && a.tipo === b.tipo;
+  return a.fecha === b.fecha && num(a.total) != null && num(b.total) != null && Math.abs(num(a.total) - num(b.total)) < 0.01;
+}
+function estadoItem(i){
+  const it = LOTE.items[i]; if (it.estado !== 'pendiente') return it.estado;
+  const pid = loteProvIdFijo();
+  if (buscarDuplicado(it.draft, pid)) return 'duplicado';
+  for (let j = 0; j < i; j++){ const o = LOTE.items[j]; if (o.estado !== 'descartado' && mismoDoc(o.draft, it.draft)) return 'repetido'; }
+  return 'pendiente';
+}
+function pintarLote(){
+  if (!LOTE) return;
+  const provs = Object.entries(S.proveedores).sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
+  const est = LOTE.items.map((it, i) => estadoItem(i));
+  const aGuardar = est.filter(e => e === 'pendiente').length;
+  let h = sheetHead('Facturas leídas (' + LOTE.items.length + ')');
+  h += `<div class="field"><label for="lProv">Proveedor de todas</label><select id="lProv" onchange="loteSyncProv();pintarLote()">
+      <option value="" ${!LOTE.provId ? 'selected' : ''}>Elige el proveedor…</option>
+      ${provs.map(([id, p]) => `<option value="${id}" ${LOTE.provId === id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}
+      <option value="__new" ${LOTE.provId === '__new' ? 'selected' : ''}>Nuevo proveedor${LOTE.provNuevo ? ': ' + esc(LOTE.provNuevo) : ''}</option></select></div>`;
+  if (LOTE.provId === '__new') h += `<div class="field"><label for="lNuevo">Nombre del nuevo proveedor</label><input id="lNuevo" value="${esc(LOTE.provNuevo)}" onchange="loteSyncProv()"></div>`;
+  h += `<div class="list">`;
+  LOTE.items.forEach((it, i) => {
+    const d = it.draft, e = est[i];
+    const badge = {pendiente:'<span class="badge green">Nuevo</span>', guardado:'<span class="badge grey">Guardado</span>', descartado:'<span class="badge grey">Descartado</span>', duplicado:'<span class="badge red">Ya estaba guardado</span>', repetido:'<span class="badge red">Repetido en estas fotos</span>'}[e];
+    const titulo = it.sinLeer ? 'Foto sin leer: revísala a mano' : (d.tipo === 'albaran' ? 'Albarán' : 'Factura') + ' ' + (d.numero || 'sin número');
+    h += `<div class="item" style="cursor:default;${e === 'descartado' || e === 'guardado' ? 'opacity:.6' : ''}">
+      <div class="row" style="justify-content:space-between"><span class="t">${esc(titulo)}</span>${badge}</div>
+      <div class="m">${fdate(d.fecha)} · ${money(d.total)} · ${d.lineas.length} productos · ${it.blobs.length} foto${it.blobs.length === 1 ? '' : 's'}</div>
+      ${it.estado === 'pendiente' ? `<div class="row" style="margin-top:.5rem"><button class="btn small" onclick="revisarItem(${i})">Revisar</button><button class="btn small danger" onclick="descartarItem(${i})">Descartar</button></div>` : ''}</div>`;
+  });
+  h += `</div><p class="note">Los marcados en rojo no se guardarán.</p>
+    <div class="row" style="margin-top:1rem"><button class="btn solid grow" id="lGuardar" onclick="guardarLote()" ${aGuardar ? '' : 'disabled'}>Guardar ${aGuardar} documento${aGuardar === 1 ? '' : 's'}</button></div>`;
+  openSheet(h);
+}
+function descartarItem(i){ loteSyncProv(); LOTE.items[i].estado = 'descartado'; pintarLote(); }
+function revisarItem(i){
+  loteSyncProv();
+  const it = LOTE.items[i];
+  if (LOTE.provId){ it.draft.proveedorId = LOTE.provId; if (LOTE.provId === '__new'){ it.draft.proveedorNuevo = LOTE.provNuevo; it.draft.cif = it.draft.cif || LOTE.cif; } }
+  abrirEditor(it.draft, it.blobs, true); EDIT.lote = i; pintarEditor();
+}
+function descartarEditor(){
+  if (EDIT && EDIT.lote != null && LOTE && LOTE.items[EDIT.lote]){ LOTE.items[EDIT.lote].estado = 'descartado'; EDIT = null; toast('Duplicado descartado'); pintarLote(); return; }
+  closeSheet(); toast('Duplicado descartado');
+}
+function volverLote(){ if (EDIT){ syncEditor(); } EDIT = null; pintarLote(); }
+async function provDeLote(){
+  if (LOTE.provId !== '__new') return LOTE.provId;
+  const nombre = (LOTE.provNuevo || '').trim(); if (!nombre) return '';
+  const ex = findProv(nombre, LOTE.cif); if (ex) return ex.id;
+  const id = uid(); await Store.save('proveedores', id, {nombre, cif:(LOTE.cif || '').trim(), telefono:(LOTE.tel || '').trim(), creado:Date.now()});
+  LOTE.provId = id; return id;
+}
+async function guardarLote(){
+  loteSyncProv();
+  if (!LOTE.provId) return toast('Elige el proveedor');
+  if (LOTE.provId === '__new' && !LOTE.provNuevo) return toast('Escribe el nombre del proveedor');
+  const btn = $('#lGuardar'); btn.disabled = true; btn.textContent = 'Guardando…';
+  let ok = 0, sinFecha = 0;
+  try {
+    const provId = await provDeLote();
+    for (let i = 0; i < LOTE.items.length; i++){
+      if (estadoItem(i) !== 'pendiente') continue;
+      const it = LOTE.items[i], d = it.draft;
+      if (it.sinLeer || !validIso(d.fecha)){ sinFecha++; continue; }
+      d.proveedorId = provId;
+      await guardarBorrador(d, it.blobs, {}, provId);
+      it.estado = 'guardado'; ok++;
+    }
+  } catch(e){ toast('No se pudo guardar: ' + ((e && e.message) || 'error'), 6000); }
+  const quedan = LOTE.items.some(it => it.estado === 'pendiente');
+  toast(ok + ' documento' + (ok === 1 ? '' : 's') + ' guardado' + (ok === 1 ? '' : 's') + (sinFecha ? '. Quedan ' + sinFecha + ' por revisar a mano.' : ''), 5000);
+  if (!quedan || !LOTE.items.some((it, i) => estadoItem(i) === 'pendiente')){ LOTE = null; closeSheet(); render(); }
+  else pintarLote();
 }
 
 /* ===== Editor de documento ===== */
@@ -757,9 +901,10 @@ function pintarEditor(){
   const provs = Object.entries(S.proveedores).sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
   const fotos = [...(d.fotos || []).map(ref => ({ref})), ...EDIT.blobs.map(b => ({src:URL.createObjectURL(b)}))];
   let h = sheetHead(EDIT.nuevo ? 'Revisa los datos' : (d.tipo === 'albaran' ? 'Albarán' : 'Factura'));
+  if (EDIT.lote != null) h += `<button class="btn small" style="margin-bottom:.6rem" onclick="volverLote()">← Volver a la lista</button>`;
   const dup = buscarDuplicado(d, d.proveedorId);
   if (dup) h += `<div class="banner stamp"><b>Este documento ya está guardado.</b><br>${dup.tipo === 'albaran' ? 'Albarán' : 'Factura'} ${esc(dup.numero || '')} de ${esc(provName(dup.proveedorId))}, del ${fdate(dup.fecha)}, por ${money(docTotal(dup))}. No se guardará otra vez.
-    <div class="row" style="margin-top:.6rem"><button class="btn small danger" onclick="closeSheet();toast('Duplicado descartado')">Descartar</button><button class="btn small" onclick="verDuplicado('${dup.id}')">Ver el guardado</button></div></div>`;
+    <div class="row" style="margin-top:.6rem"><button class="btn small danger" onclick="descartarEditor()">Descartar</button><button class="btn small" onclick="verDuplicado('${dup.id}')">Ver el guardado</button></div></div>`;
   else if (EDIT.nuevo) h += `<p class="note">Comprueba lo que se ha leído y corrige lo que haga falta antes de guardar.</p>`;
   if (fotos.length) h += `<div class="thumbs">${fotos.map(f => f.ref ? `<img data-foto="${esc(f.ref)}" alt="Documento" onclick="verFoto(this.src)">` : `<img src="${esc(f.src)}" alt="Documento" onclick="verFoto(this.src)">`).join('')}</div>`;
   h += `<div class="grid2">
@@ -837,6 +982,19 @@ async function fotoEnvase(i){
     toast(r && (r.lote || r.caducidad) ? 'Lote y fecha leídos. Revísalos y pulsa Guardar.' : 'No se vio lote ni fecha. Escríbelos a mano.', 5000);
   } catch(e){ if (EDIT) pintarEditor(); toast(errMsg(e), 6000); }
 }
+async function guardarBorrador(d, blobs, envases, provId){
+  const fotos = [...(d.fotos || [])];
+  for (const b of blobs || []) fotos.push(await guardarFoto(b));
+  const lineas = [];
+  for (let i = 0; i < d.lineas.length; i++){
+    const l = d.lineas[i]; if (!l.producto) continue;
+    let fe = l.fotoEnvase || '';
+    if (envases && envases[i]) fe = await guardarFoto(envases[i]);
+    lineas.push({producto:l.producto, cantidad:l.cantidad, unidad:l.unidad || '', precio:l.precio, importe:l.importe, lote:l.lote || '', caducidad:validIso(l.caducidad) ? l.caducidad : '', fotoEnvase:fe, agotado:!!l.agotado});
+  }
+  const doc = {tipo:d.tipo, proveedorId:provId, numero:d.numero, fecha:d.fecha, total:d.total, fotos, lineas, creado:d.creado || Date.now(), actualizado:Date.now()};
+  await Store.save('documentos', d.id, doc);
+}
 async function guardarDoc(){
   syncEditor(); const d = EDIT.draft;
   let provId = d.proveedorId;
@@ -855,17 +1013,14 @@ async function guardarDoc(){
       pintarEditor();
       return toast('Este documento ya estaba guardado (' + (dup.numero ? 'nº ' + dup.numero + ', ' : '') + fdate(dup.fecha) + '). No se ha guardado otra vez.', 6000);
     }
-    const fotos = [...(d.fotos || [])];
-    for (const b of EDIT.blobs) fotos.push(await guardarFoto(b));
-    const lineas = [];
-    for (let i = 0; i < d.lineas.length; i++){
-      const l = d.lineas[i]; if (!l.producto) continue;
-      let fe = l.fotoEnvase || '';
-      if (EDIT.envases[i]) fe = await guardarFoto(EDIT.envases[i]);
-      lineas.push({producto:l.producto, cantidad:l.cantidad, unidad:l.unidad || '', precio:l.precio, importe:l.importe, lote:l.lote || '', caducidad:validIso(l.caducidad) ? l.caducidad : '', fotoEnvase:fe, agotado:!!l.agotado});
+    await guardarBorrador(d, EDIT.blobs, EDIT.envases, provId);
+    const enLote = EDIT.lote;
+    if (enLote != null && LOTE && LOTE.items[enLote]){
+      LOTE.items[enLote].estado = 'guardado'; EDIT = null;
+      toast('Guardado en ' + provName(provId));
+      if (LOTE.items.some((it, i) => estadoItem(i) === 'pendiente')) pintarLote(); else { LOTE = null; closeSheet(); render(); }
+      return;
     }
-    const doc = {tipo:d.tipo, proveedorId:provId, numero:d.numero, fecha:d.fecha, total:d.total, fotos, lineas, creado:d.creado || Date.now(), actualizado:Date.now()};
-    await Store.save('documentos', d.id, doc);
     closeSheet(); toast('Guardado en ' + provName(provId));
   } catch(e){
     btn.disabled = false; btn.textContent = 'Guardar';
