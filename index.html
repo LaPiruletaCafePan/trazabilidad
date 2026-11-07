@@ -212,7 +212,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '4.2.2';
+const APP_VERSION = '4.3';
 const COLS = ['proveedores','documentos','ventas','temporada','equivalencias','ingredientes','reglas'];
 const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}, equivalencias:{}, ingredientes:{}, reglas:{}};
 let pendingRender = false, LISTO = false;
@@ -560,12 +560,61 @@ async function aplicarRecortes(blobs, recortes){
       if (rc){ const img = await loadImg(b); pts = puntosDesde(rc.esquinas, img.width, img.height);
         if (pts){ const a = Math.abs((pts[0][0]*pts[1][1]-pts[1][0]*pts[0][1])+(pts[1][0]*pts[2][1]-pts[2][0]*pts[1][1])+(pts[2][0]*pts[3][1]-pts[3][0]*pts[2][1])+(pts[3][0]*pts[0][1]-pts[0][0]*pts[3][1]))/2;
           if (a > 0.97 * img.width * img.height) pts = null; } }
-      out.blobs.push(pts ? await enderezar(b, pts) : b);
+      out.blobs.push(await digitalizar(pts ? await enderezar(b, pts) : b));
     } catch(e){ pts = null; out.blobs.push(b); }
     out.origs.push(b); out.pts.push(pts);
   }
   return out;
 }
+
+/* ===== Digitalizar: que la foto parezca escaneada (fondo blanco, sin sombras, letra nítida) ===== */
+const modoEscaneo = () => localStorage.getItem('escaneo') || 'color';
+async function digitalizar(blob, modo){
+  modo = modo || modoEscaneo(); if (modo === 'no') return blob;
+  const img = await loadImg(blob); const W = img.width, H = img.height;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0);
+  const id = cx.getImageData(0, 0, W, H), d = id.data;
+  // 1) Brillo del papel por zonas (para quitar sombras y luz desigual)
+  const B = Math.max(16, Math.round(Math.max(W, H) / 40)), gw = Math.ceil(W / B), gh = Math.ceil(H / B);
+  let g = new Float32Array(gw * gh); const hist = new Uint32Array(256);
+  for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++){
+    hist.fill(0); let n = 0;
+    for (let y = gy * B; y < Math.min(H, (gy + 1) * B); y += 2) for (let x = gx * B; x < Math.min(W, (gx + 1) * B); x += 2){
+      const i = (y * W + x) * 4; hist[(d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 | 0]++; n++; }
+    let acc = 0, v = 255; const t = n * 0.9; for (let k = 0; k < 256; k++){ acc += hist[k]; if (acc >= t){ v = k; break; } }
+    g[gy * gw + gx] = v;
+  }
+  for (let pasada = 0; pasada < 2; pasada++){
+    const n2 = new Float32Array(gw * gh);
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++){ let s = 0, c = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){ const yy = y + dy, xx = x + dx; if (yy < 0 || xx < 0 || yy >= gh || xx >= gw) continue; s += g[yy * gw + xx]; c++; }
+      n2[y * gw + x] = Math.max(g[y * gw + x], s / c); }
+    g = n2;
+  }
+  // 2) Cada píxel dividido por el brillo del papel, y subir contraste
+  const NEGRO = 45, BLANCO = 228, esc = 255 / (BLANCO - NEGRO);
+  const LUT = new Uint8ClampedArray(256); for (let k = 0; k < 256; k++){ const v = Math.min(1, Math.max(0, (k - NEGRO) * esc / 255)); LUT[k] = Math.round(255 * Math.pow(v, 1.5)); }
+  for (let y = 0; y < H; y++){
+    const fy = Math.min(gh - 1, Math.max(0, (y + 0.5) / B - 0.5)), y0 = fy | 0, y1 = Math.min(gh - 1, y0 + 1), ty = fy - y0;
+    for (let x = 0; x < W; x++){
+      const fx = Math.min(gw - 1, Math.max(0, (x + 0.5) / B - 0.5)), x0 = fx | 0, x1 = Math.min(gw - 1, x0 + 1), tx = fx - x0;
+      const bg = (g[y0 * gw + x0] * (1 - tx) + g[y0 * gw + x1] * tx) * (1 - ty) + (g[y1 * gw + x0] * (1 - tx) + g[y1 * gw + x1] * tx) * ty;
+      const f = 255 / Math.max(bg, 60), i = (y * W + x) * 4;
+      if (modo === 'bn'){
+        const l = LUT[Math.min(255, (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 * f) | 0];
+        d[i] = d[i + 1] = d[i + 2] = l;
+      } else {
+        const lum = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 * f;
+        if (lum >= BLANCO - 6){ d[i] = d[i + 1] = d[i + 2] = 255; }
+        else for (let c = 0; c < 3; c++) d[i + c] = LUT[Math.min(255, d[i + c] * f) | 0];
+      }
+    }
+  }
+  cx.putImageData(id, 0, 0);
+  return await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.85));
+}
+function cambiarEscaneo(k){ localStorage.setItem('escaneo', k); abrirAjustes(); }
 
 /* ===== Pantalla para ajustar el recorte a mano ===== */
 let CROP = null;
@@ -626,7 +675,7 @@ async function aplicarRecorte(entera){
   if (!CROP || !EDIT) return cerrarRecorte();
   const b = $('#cropOk'); if (b){ b.disabled = true; b.textContent = 'Recortando…'; }
   const c = CROP; let nuevo;
-  try { nuevo = entera ? c.src : await enderezar(c.src, c.pts); } catch(e){ cerrarRecorte(); return toast('No se pudo recortar'); }
+  try { nuevo = await digitalizar(entera ? c.src : await enderezar(c.src, c.pts)); } catch(e){ cerrarRecorte(); return toast('No se pudo recortar'); }
   if (c.tipo === 'nueva'){
     EDIT.origs = EDIT.origs || []; EDIT.pts = EDIT.pts || [];
     if (!EDIT.origs[c.i]) EDIT.origs[c.i] = c.src;
@@ -968,9 +1017,10 @@ function borradorDesde(r){
       lote:l.lote || '', caducidad: validIso(l.caducidad) ? l.caducidad : '', fotoEnvase:'', agotado:false }))
   };
 }
-function nuevoManual(){
-  const blobs = PAGINAS.map(p => p.blob); PAGINAS = []; render();
-  abrirEditor({id:uid(), tipo:'albaran', proveedorId:'', proveedorNuevo:'', cif:'', telefono:'', numero:'', fecha:iso(new Date()), total:null, fotos:[], lineas:[]}, blobs, true);
+async function nuevoManual(){
+  const origs = PAGINAS.map(p => p.blob); PAGINAS = []; render();
+  const blobs = []; for (const b of origs){ try { blobs.push(await digitalizar(b)); } catch(e){ blobs.push(b); } }
+  abrirEditor({id:uid(), tipo:'albaran', proveedorId:'', proveedorNuevo:'', cif:'', telefono:'', numero:'', fecha:iso(new Date()), total:null, fotos:[], lineas:[]}, blobs, true, {origs, pts:origs.map(() => null)});
 }
 
 /* ===== Varias facturas a la vez ===== */
@@ -1210,7 +1260,7 @@ async function guardarBorrador(d, blobs, envases, provId, extra){
   extra = extra || {};
   const fotos = [...(d.fotos || [])]; const fotosOrig = [...(d.fotosOrig || [])];
   while (fotosOrig.length < fotos.length) fotosOrig.push('');
-  let recortado = !!d.recortado;
+  let recortado = !!d.recortado; let digitalizado = !!d.digitalizado || modoEscaneo() !== 'no';
   for (const [k, b] of Object.entries(extra.reempl || {})){ const i = +k; if (!fotos[i]) continue; if (!fotosOrig[i]) fotosOrig[i] = fotos[i]; fotos[i] = await guardarFoto(b); recortado = true; }
   for (let j = 0; j < (blobs || []).length; j++){
     const b = blobs[j], o = (extra.origs || [])[j];
@@ -1225,7 +1275,7 @@ async function guardarBorrador(d, blobs, envases, provId, extra){
     if (envases && envases[i]) fe = await guardarFoto(envases[i]);
     lineas.push({producto:l.producto, cantidad:l.cantidad, unidad:l.unidad || '', precio:l.precio, importe:l.importe, lote:l.lote || '', caducidad:validIso(l.caducidad) ? l.caducidad : '', fotoEnvase:fe, agotado:!!l.agotado});
   }
-  const doc = {tipo:d.tipo, proveedorId:provId, numero:d.numero, fecha:d.fecha, total:d.total, fotos, fotosOrig, recortado, lineas, creado:d.creado || Date.now(), actualizado:Date.now()};
+  const doc = {tipo:d.tipo, proveedorId:provId, numero:d.numero, fecha:d.fecha, total:d.total, fotos, fotosOrig, recortado, digitalizado:digitalizado && !!fotos.length, lineas, creado:d.creado || Date.now(), actualizado:Date.now()};
   await Store.save('documentos', d.id, doc);
 }
 async function guardarDoc(){
@@ -2009,9 +2059,12 @@ function abrirAjustes(){
         <button class="btn small danger" onclick="quitarCfg()">Quitar</button></div>`
       : `<div class="field"><label for="fbCfg">Configuración de Firebase</label><textarea id="fbCfg" rows="6" placeholder="Pega aquí el bloque const firebaseConfig = { … }"></textarea></div>
         <button class="btn small solid" onclick="guardarCfg()">Guardar configuración</button>`}
-    <h3 style="margin-top:1.2rem">Recortar facturas ya guardadas</h3>
-    <p class="note">Recorta y endereza las fotos de los documentos que guardaste antes de esta función. Las fotos originales se conservan. ${porRecortar().length ? 'Quedan <b>' + porRecortar().length + '</b> documentos por recortar.' : 'No queda ninguno por recortar.'}</p>
-    ${porRecortar().length ? `<button class="btn small solid" id="btnRecAnt" onclick="recortarAntiguas()">${RECORTANDO ? 'Recortando…' : 'Recortar ahora'}</button>` : ''}
+    <h3 style="margin-top:1.2rem">Digitalizar (que parezcan escaneadas)</h3>
+    <p class="note">Las facturas y albaranes se recortan y se limpian como en un escáner: fondo blanco, sin sombras y letra nítida.</p>
+    <div class="chips">${[['color','En color'],['bn','Blanco y negro'],['no','Sin digitalizar']].map(([k, n]) => `<button class="chip ${modoEscaneo() === k ? 'on' : ''}" onclick="cambiarEscaneo('${k}')">${n}</button>`).join('')}</div>
+    <h3 style="margin-top:1.2rem">Recortar y digitalizar facturas ya guardadas</h3>
+    <p class="note">Aplica el recorte y el digitalizado a los documentos que guardaste antes. Las fotos originales se conservan en este móvil. ${porRecortar().length ? 'Quedan <b>' + porRecortar().length + '</b> documentos por recortar.' : 'No queda ninguno por recortar.'}</p>
+    ${porRecortar().length ? `<button class="btn small solid" id="btnRecAnt" onclick="recortarAntiguas()">${RECORTANDO ? 'Trabajando…' : 'Recortar y digitalizar ahora'}</button>` : ''}
     <h3 style="margin-top:1.2rem">Tus datos</h3>
     <p class="note">${leerCfg() ? 'Tus datos están en este móvil y en tu nube de Firebase. La copia de seguridad es un extra por si acaso.' : 'Todo se guarda en este móvil, sin nube. Descarga una copia de seguridad cada semana y guárdala en tu Google Drive o envíatela por correo.'}</p>
     <div class="row"><button class="btn small" onclick="backup()">Descargar copia</button><button class="btn small" onclick="restaurar()">Restaurar copia</button></div>
@@ -2028,32 +2081,34 @@ async function probarKey(){
 
 /* ===== Recortar documentos antiguos ===== */
 let RECORTANDO = false;
-const porRecortar = () => Object.entries(S.documentos).filter(([, d]) => !d.recortado && (d.fotos || []).length);
+const porRecortar = () => Object.entries(S.documentos).filter(([, d]) => (d.fotos || []).length && (!d.recortado || (!d.digitalizado && modoEscaneo() !== 'no')));
 async function recortarAntiguas(){
-  if (RECORTANDO) return; if (!hasKey()) return toast(errMsg({code:'no_key'}));
+  if (RECORTANDO) return;
   const lista = porRecortar(); if (!lista.length) return toast('No queda ninguno por recortar');
+  if (lista.some(([, d]) => !d.recortado) && !hasKey()) return toast(errMsg({code:'no_key'}));
   RECORTANDO = true; const b = $('#btnRecAnt'); if (b){ b.disabled = true; b.textContent = 'Recortando…'; }
   let hechos = 0;
   try {
     for (const [id, d0] of lista){
       const d = JSON.parse(JSON.stringify(S.documentos[id] || d0));
-      toast('Recortando documento ' + (hechos + 1) + ' de ' + lista.length + '…', 20000);
+      toast('Preparando documento ' + (hechos + 1) + ' de ' + lista.length + '…', 20000);
       const blobs = []; for (const ref of d.fotos) blobs.push(await getFotoBlob(ref));
-      if (blobs.some(x => !x)){ d.recortado = true; await Store.save('documentos', id, d); hechos++; continue; }
-      const r = await askJSON(promptEsquinas(blobs.length), blobs, true);
-      const rec = await aplicarRecortes(blobs, r && r.recortes);
+      if (blobs.some(x => !x)){ d.recortado = true; d.digitalizado = true; await Store.save('documentos', id, d); hechos++; continue; }
+      let rec;
+      if (!d.recortado){ const r = await askJSON(promptEsquinas(blobs.length), blobs, true); rec = await aplicarRecortes(blobs, r && r.recortes); }
+      else { rec = {blobs:[], pts:[]}; for (const b of blobs){ rec.blobs.push(await digitalizar(b)); rec.pts.push(null); } }
       d.fotosOrig = d.fotosOrig || [];
       for (let i = 0; i < d.fotos.length; i++){
-        if (!rec.pts[i]) continue;
+        if (rec.blobs[i] === blobs[i]) continue;
         if (!d.fotosOrig[i]) d.fotosOrig[i] = d.fotos[i];
         d.fotos[i] = await guardarFoto(rec.blobs[i]);
       }
       while (d.fotosOrig.length < d.fotos.length) d.fotosOrig.push('');
-      d.recortado = true; d.actualizado = Date.now();
+      d.recortado = true; d.digitalizado = modoEscaneo() !== 'no'; d.actualizado = Date.now();
       await Store.save('documentos', id, d); hechos++;
     }
-    toast('Listo: ' + hechos + ' documento' + (hechos === 1 ? '' : 's') + ' recortado' + (hechos === 1 ? '' : 's') + '. Revisa alguno por si hay que ajustar.', 6000);
-  } catch(e){ toast(errMsg(e) + ' Se han recortado ' + hechos + '. Pulsa otra vez para seguir con el resto.', 8000); }
+    toast('Listo: ' + hechos + ' documento' + (hechos === 1 ? '' : 's') + ' listo' + (hechos === 1 ? '' : 's') + '. Revisa alguno por si hay que ajustar.', 6000);
+  } catch(e){ toast(errMsg(e) + ' Se han preparado ' + hechos + '. Pulsa otra vez para seguir con el resto.', 8000); }
   RECORTANDO = false;
   if ($('#btnRecAnt')) abrirAjustes();
 }
