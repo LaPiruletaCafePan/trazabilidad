@@ -166,6 +166,13 @@ window.mostrarFallo = function(m){
   var a = document.getElementById('app'); if (!a) return;
   a.innerHTML = '<div style="margin:1rem 0;padding:1rem;border-radius:12px;background:#FBE9E7;color:#C2362B;font-size:.95rem"><b>La app no ha podido arrancar.</b><br>Haz una captura de esta pantalla y envíasela a Claude.<br><br><code style="word-break:break-all;color:#22263A">' + String(m).replace(/</g,'&lt;') + '</code><br><br><button onclick="location.reload()" style="padding:.6rem 1rem;border-radius:10px;border:1.5px solid #C2362B;background:#fff;color:#C2362B;font-weight:700">Reintentar</button></div>';
 };
+window.addEventListener('load', function(){
+  if (window.APP_OK) return;
+  var d = document.createElement('div');
+  d.style.cssText = 'margin:1rem;padding:1rem;border-radius:12px;background:#FBE9E7;color:#C2362B;font:15px/1.5 system-ui,sans-serif';
+  d.innerHTML = '<b>La app se ha descargado incompleta.</b><br>El archivo index.html publicado en GitHub está cortado. Vuelve a descargar index.html del chat de Claude y súbelo otra vez al repositorio «trazabilidad».<br><br><button onclick="location.reload()" style="padding:.6rem 1rem;border-radius:10px;border:1.5px solid #C2362B;background:#fff;color:#C2362B;font-weight:700">Reintentar</button>';
+  document.body.appendChild(d);
+});
 window.addEventListener('error', function(e){ var a = document.getElementById('app'); if (a && !a.children.length) window.mostrarFallo((e.message || 'Error') + (e.lineno ? ' (línea ' + e.lineno + ')' : '')); });
 </script>
 </head>
@@ -205,7 +212,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '4.2';
+const APP_VERSION = '4.2.1';
 const COLS = ['proveedores','documentos','ventas','temporada','equivalencias','ingredientes','reglas'];
 const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}, equivalencias:{}, ingredientes:{}, reglas:{}};
 let pendingRender = false, LISTO = false;
@@ -2106,6 +2113,7 @@ async function restaurar(){
 /* ===== Arranque ===== */
 render();
 Store.init();
+window.APP_OK = true;
 </script>
 </body>
 </html>
