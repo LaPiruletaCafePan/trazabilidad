@@ -4,135 +4,162 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Trazabilidad · La Piruleta</title>
-<meta name="theme-color" content="#1E2A5A">
+<meta name="theme-color" content="#1b7f95">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;600;800&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
 <style>
+/* ===== Estilo igual que TPV Factu (azul petróleo, Epilogue) ===== */
 :root{
-  --paper:#F7F8FB; --card:#FFFFFF; --ink:#1E2A5A; --text:#22263A; --muted:#5E6584;
-  --line:#DADCE7; --stamp:#C2362B; --stampbg:#FBE9E7; --tag:#F3D45C; --tagink:#4A3B00;
-  --warn:#A86200; --warnbg:#FFF2DC; --ok:#2D7A4C; --okbg:#E5F4EA; --accent:#2F49B8;
-  color-scheme: light;
+  --c:#1b7f95; --bg:#f4f9fb;
+  --paper:var(--bg); --card:#fff; --ink:var(--c); --text:#292524; --muted:#78716c;
+  --line:#e7e5e4; --inpline:#d6d3d1; --inpbg:#fff; --soft:#e7e5e4; --softhover:#d6d3d1;
+  --stamp:#b91c1c; --stampbg:#fee2e2; --warn:#92400e; --warnbg:#fef3c7; --warnline:#fcd34d;
+  --ok:#15803d; --okbg:#dcfce7; --tag:#fef3c7; --tagink:#92400e; --accent:var(--c); --onc:#fff;
+  --nav:var(--c);
+  color-scheme:light;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --paper:#11142A; --card:#1A1E3A; --ink:#C9D2FF; --text:#E6E8F4; --muted:#9BA2C4;
-    --line:#2D3360; --stamp:#FF7A6E; --stampbg:#3A1E24; --tag:#E9C84A; --tagink:#2A2100;
-    --warn:#FFB65C; --warnbg:#3A2C14; --ok:#6FD39A; --okbg:#173326; --accent:#8EA2FF;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"]{
-  --paper:#11142A; --card:#1A1E3A; --ink:#C9D2FF; --text:#E6E8F4; --muted:#9BA2C4;
-  --line:#2D3360; --stamp:#FF7A6E; --stampbg:#3A1E24; --tag:#E9C84A; --tagink:#2A2100;
-  --warn:#FFB65C; --warnbg:#3A2C14; --ok:#6FD39A; --okbg:#173326; --accent:#8EA2FF;
-  color-scheme: dark;
+html.dark{
+  --c:#4fc3d8; --bg:#10242c;
+  --card:#132c36; --text:#fff; --muted:#aab9bf; --line:#27667a; --inpline:#27667a; --inpbg:#0c1d24;
+  --soft:#1f4756; --softhover:#2a6f83;
+  --stamp:#ff9db5; --stampbg:#4a1f2b; --warn:#f3c969; --warnbg:#3a3217; --warnline:#b8923a;
+  --ok:#7be0a8; --okbg:#173a2a; --tag:#3a3217; --tagink:#f3c969; --onc:#08222b;
+  --nav:linear-gradient(90deg,#124f61,#1f7a90);
+  color-scheme:dark;
 }
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *,*::before,*::after{box-sizing:inherit}
-body{margin:0;background:var(--paper);color:var(--text);font:16px/1.5 "Atkinson Hyperlegible",system-ui,sans-serif;padding-bottom:84px}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
-h1,h2,h3{font-family:"Bricolage Grotesque",system-ui,sans-serif;color:var(--ink);margin:0;line-height:1.15}
-h1{font-size:1.35rem;font-weight:800}
-h2{font-size:1.25rem;font-weight:800;margin:1.6rem 0 .6rem}
-h3{font-size:1.05rem;font-weight:600}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 Epilogue,system-ui,sans-serif;padding-bottom:1.5rem}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:#1b7f95}
+html.dark body::before{background:#124f61}
+h1,h2,h3{font-family:Epilogue,system-ui,sans-serif;color:var(--text);margin:0;line-height:1.2;font-weight:800}
+h1{font-size:1.25rem}
+h2{font-size:1.15rem;margin:1.5rem 0 .6rem}
+h3{font-size:1rem}
 button,input,select,textarea{font:inherit;color:inherit}
 img{max-width:100%}
-.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--line);padding:.7rem 1rem;display:flex;align-items:center;gap:.6rem}
-.top .sub{font-size:.8rem;color:var(--muted)}
-.wrap{max-width:720px;margin:0 auto;padding:0 1rem}
-.note{font-size:.9rem;color:var(--muted);margin:.4rem 0}
-.banner{border-radius:12px;padding:.8rem 1rem;margin:.8rem 0;font-size:.95rem}
-.banner.info{background:var(--card);border:1px dashed var(--line)}
-.banner.warn{background:var(--warnbg);color:var(--warn)}
+a{color:var(--c)}
+/* Barra superior con pestañas (como TPV Factu) */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--nav);color:#fff;display:flex;align-items:center;gap:.25rem;padding:.5rem;overflow-x:auto;scrollbar-width:none}
+.top::-webkit-scrollbar{display:none}
+.tabsbar{display:flex;gap:.25rem}
+.tabsbar button,.navbtn{padding:.5rem .75rem;border-radius:.75rem;font-size:.875rem;font-weight:700;white-space:nowrap;border:0;cursor:pointer;background:rgba(0,0,0,.25);color:#fff}
+.tabsbar button.on{background:#fff;color:#1b7f95}
+html.dark .tabsbar button.on{background:var(--c);color:#08222b}
+.top .badge{margin-left:auto;flex:none}
+.top .navbtn{flex:none}
+.wrap{max-width:42rem;margin:0 auto;padding:.25rem 1rem 0}
+.mono{font-family:'Space Mono',monospace}
+.note{font-size:.85rem;color:var(--muted);margin:.4rem 0}
+.banner{border-radius:1rem;padding:.8rem 1rem;margin:.8rem 0;font-size:.9rem;border:1px solid transparent}
+.banner.info{background:var(--card);border-color:var(--line)}
+.banner.warn{background:var(--warnbg);color:var(--warn);border-color:var(--warnline)}
 .banner.stamp{background:var(--stampbg);color:var(--stamp)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;border:1.5px solid var(--ink);background:transparent;color:var(--ink);border-radius:10px;padding:.65rem 1rem;font-weight:700;cursor:pointer;min-height:46px}
-.btn.solid{background:var(--ink);color:var(--paper)}
-.btn.danger{border-color:var(--stamp);color:var(--stamp)}
-.btn.small{min-height:36px;padding:.35rem .7rem;font-size:.9rem}
+/* Botones (como .btn de TPV Factu) */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;border:0;background:var(--soft);color:var(--text);border-radius:.9rem;padding:.7rem 1rem;font-weight:800;font-size:.85rem;cursor:pointer;min-height:44px}
+.btn:active{background:var(--softhover)}
+.btn.solid{background:var(--c);color:var(--onc)}
+.btn.danger{background:var(--stampbg);color:var(--stamp)}
+.btn.small{min-height:36px;padding:.45rem .8rem;font-size:.8rem}
 .btn:disabled{opacity:.45;cursor:default}
-.btn:focus-visible,.chip:focus-visible,.tabs button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-.row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
+.btn:focus-visible,.chip:focus-visible,.tabsbar button:focus-visible,.navbtn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--c);outline-offset:2px}
+.row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
 .grow{flex:1 1 auto}
-.scanbig{display:flex;flex-direction:column;align-items:flex-start;gap:.3rem;width:100%;text-align:left;background:var(--ink);color:var(--paper);border:0;border-radius:16px;padding:1.2rem 1.2rem 1.1rem;cursor:pointer;margin-top:1rem}
-.scanbig b{font-family:"Bricolage Grotesque",sans-serif;font-size:1.4rem;font-weight:800}
-.scanbig span{opacity:.85;font-size:.92rem}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:.8rem}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:.7rem .9rem}
-.stat .n{font-family:"Bricolage Grotesque",sans-serif;font-size:1.35rem;font-weight:800;color:var(--ink)}
-.stat .l{font-size:.85rem;color:var(--muted)}
+.scanbig{display:flex;flex-direction:column;align-items:flex-start;gap:.25rem;width:100%;text-align:left;background:var(--c);color:var(--onc);border:0;border-radius:1rem;padding:1.1rem 1.1rem 1rem;cursor:pointer;margin-top:1rem}
+.scanbig b{font-size:1.25rem;font-weight:800}
+.scanbig span{opacity:.9;font-size:.88rem}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.8rem}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:1rem;padding:.75rem 1rem}
+.stat .n{font-family:'Space Mono',monospace;font-size:1.2rem;font-weight:700;color:var(--c)}
+.stat .l{font-size:.8rem;color:var(--muted)}
 .list{display:flex;flex-direction:column;gap:.5rem}
-.item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:.75rem .9rem;cursor:pointer;text-align:left;width:100%}
-.item .t{font-weight:700}
-.item .m{font-size:.88rem;color:var(--muted)}
-.lote{display:inline-block;background:var(--tag);color:var(--tagink);font-weight:700;border-radius:4px;padding:0 .4rem;font-size:.85rem;letter-spacing:.02em}
-.badge{display:inline-block;border-radius:999px;padding:.05rem .55rem;font-size:.8rem;font-weight:700}
+.item{background:var(--card);border:1px solid var(--line);border-radius:1rem;padding:.75rem 1rem;cursor:pointer;text-align:left;width:100%;color:var(--text)}
+.item .t{font-weight:800}
+.item .m{font-size:.85rem;color:var(--muted)}
+.lote{display:inline-block;background:var(--tag);color:var(--tagink);font-weight:700;border-radius:.4rem;padding:0 .4rem;font-size:.8rem;font-family:'Space Mono',monospace}
+.badge{display:inline-block;border-radius:999px;padding:.1rem .55rem;font-size:.75rem;font-weight:700;white-space:nowrap}
 .badge.red{background:var(--stampbg);color:var(--stamp)}
 .badge.amber{background:var(--warnbg);color:var(--warn)}
 .badge.green{background:var(--okbg);color:var(--ok)}
-.badge.grey{background:var(--line);color:var(--muted)}
-.season{display:flex;gap:.8rem;align-items:center;background:var(--card);border:1px solid var(--line);border-left:6px solid var(--warn);border-radius:12px;padding:.7rem .9rem;margin:.5rem 0}
+.badge.grey{background:var(--soft);color:var(--muted)}
+.season{display:flex;gap:.8rem;align-items:center;background:var(--card);border:1px solid var(--line);border-left:6px solid var(--warn);border-radius:1rem;padding:.7rem .9rem;margin:.5rem 0}
 .season.now{border-left-color:var(--ok)}
-.season .d{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:1.5rem;color:var(--ink);min-width:3.2rem;text-align:center;line-height:1}
-.season .d small{display:block;font-size:.7rem;font-weight:600;color:var(--muted)}
-.chips{display:flex;gap:.4rem;flex-wrap:wrap;margin:.6rem 0}
-.chip{border:1.5px solid var(--line);background:var(--card);border-radius:999px;padding:.35rem .85rem;cursor:pointer;font-weight:700;font-size:.9rem;color:var(--muted)}
-.chip.on{border-color:var(--ink);color:var(--ink)}
-.field{display:flex;flex-direction:column;gap:.2rem;margin:.45rem 0;min-width:0}
-.field label{font-size:.82rem;color:var(--muted);font-weight:700}
-.field input,.field select,.field textarea{background:var(--paper);border:1.5px solid var(--line);border-radius:8px;padding:.55rem .65rem;min-height:44px;width:100%}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 .6rem}
+.season .d{font-family:'Space Mono',monospace;font-weight:700;font-size:1.4rem;color:var(--c);min-width:3.2rem;text-align:center;line-height:1}
+.season .d small{display:block;font-family:Epilogue,sans-serif;font-size:.7rem;font-weight:600;color:var(--muted)}
+/* Chips (como .chip de TPV Factu) */
+.chips{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}
+.chip{padding:.45rem .9rem;border-radius:.8rem;font-weight:700;font-size:.8rem;background:var(--card);border:1px solid var(--line);white-space:nowrap;cursor:pointer;color:var(--text)}
+.chip.on{background:var(--c);color:var(--onc);border-color:var(--c)}
+/* Campos (como .inp de TPV Factu) */
+.field{display:flex;flex-direction:column;gap:.1rem;margin:.45rem 0;min-width:0}
+.field label{font-size:.75rem;font-weight:700;color:var(--text)}
+.field input,.field select,.field textarea{width:100%;margin-top:.15rem;padding:.6rem;border:1px solid var(--inpline);border-radius:.7rem;font-size:.95rem;background:var(--inpbg);color:var(--text);min-height:42px}
+::placeholder{color:#a8a29e}
+html.dark ::placeholder{color:#7f9aa3}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 .5rem}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 .5rem}
-.line{border:1px solid var(--line);border-radius:12px;padding:.5rem .75rem .7rem;margin:.6rem 0;background:var(--card)}
-.line .head{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;color:var(--muted);font-weight:700}
+.line{border:1px solid var(--line);border-radius:1rem;padding:.5rem .75rem .7rem;margin:.6rem 0;background:var(--bg)}
+.line .head{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--muted);font-weight:700}
 .thumbs{display:flex;gap:.5rem;overflow-x:auto;padding:.3rem 0}
-.thumbs img{height:110px;border-radius:8px;border:1px solid var(--line);cursor:pointer;object-fit:cover}
+.thumbs img{height:110px;border-radius:.7rem;border:1px solid var(--line);cursor:pointer;object-fit:cover}
 .thumbs .pg{display:flex;flex-direction:column;align-items:center;gap:.3rem;flex:none}
-.recorte{position:fixed;inset:0;z-index:45;background:#0B0D1A;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.recorte{position:fixed;inset:0;z-index:45;background:#0c1d24;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 .recorte .zona{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:.6rem}
 .recorte canvas{touch-action:none;max-width:100%;max-height:100%}
-.recorte .barra{display:flex;gap:.5rem;flex-wrap:wrap;padding:.6rem .8rem;background:#151935}
-.recorte .barra .btn{border-color:#C9D2FF;color:#C9D2FF;flex:1 1 auto}
-.recorte .barra .btn.solid{background:#C9D2FF;color:#11142A}
-.recorte p{color:#C9D2FF;margin:.5rem .8rem 0;font-size:.9rem}
+.recorte .barra{display:flex;gap:.5rem;flex-wrap:wrap;padding:.6rem .8rem;background:#132c36}
+.recorte .barra .btn{background:#1f4756;color:#fff;flex:1 1 auto}
+.recorte .barra .btn.solid{background:#4fc3d8;color:#08222b}
+.recorte p{color:#cfe3e8;margin:.5rem .8rem 0;font-size:.9rem}
 .envase{display:flex;gap:.6rem;align-items:center;margin-top:.4rem}
-.envase img{width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.envase img{width:56px;height:56px;object-fit:cover;border-radius:.5rem;border:1px solid var(--line)}
 .bars{display:flex;flex-direction:column;gap:.45rem}
-.bar .lab{display:flex;justify-content:space-between;font-size:.9rem}
-.bar .track{height:10px;background:var(--line);border-radius:999px;overflow:hidden;margin-top:.15rem}
-.bar .fill{height:100%;background:var(--ink);border-radius:999px}
-.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--card)}
-table{border-collapse:collapse;width:100%;font-size:.9rem}
+.bar .lab{display:flex;justify-content:space-between;font-size:.85rem}
+.bar .lab b{font-family:'Space Mono',monospace}
+.bar .track{height:10px;background:var(--soft);border-radius:999px;overflow:hidden;margin-top:.15rem}
+.bar .fill{height:100%;background:var(--c);border-radius:999px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:1rem;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.85rem}
 th,td{padding:.5rem .6rem;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
-th{color:var(--muted);font-size:.8rem}
+th{color:var(--muted);font-size:.75rem;font-weight:700}
 td.num,th.num{text-align:right}
+td.num{font-family:'Space Mono',monospace;font-size:.8rem}
 tr:last-child td{border-bottom:0}
-.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom,0px)}
-.tabs button{flex:1;background:none;border:0;padding:.5rem 0 .55rem;display:flex;flex-direction:column;align-items:center;gap:.15rem;font-size:.72rem;font-weight:700;color:var(--muted);cursor:pointer}
-.tabs button svg{width:24px;height:24px}
-.tabs button.on{color:var(--ink)}
-.sheet{position:fixed;inset:0;z-index:20;background:rgba(10,12,30,.5);display:flex;align-items:flex-end;justify-content:center}
+/* Ventanas: centradas como los modales de TPV Factu */
+.sheet{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.5);display:grid;place-items:center;padding:1rem}
 .sheet.hidden{display:none}
-.sheet-card{background:var(--paper);width:100%;max-width:720px;max-height:92vh;max-height:92dvh;overflow:auto;border-radius:18px 18px 0 0;padding:1rem 1rem calc(1.2rem + env(safe-area-inset-bottom,0px))}
-.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-bottom:.4rem}
+.sheet-card{background:var(--card);color:var(--text);width:100%;max-width:26rem;max-height:92vh;max-height:92dvh;overflow:auto;border-radius:1rem;padding:1.25rem}
+.sheet-card h2{font-size:1.1rem}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-bottom:.5rem}
 .x{background:none;border:0;font-size:1.6rem;line-height:1;color:var(--muted);cursor:pointer;padding:.2rem .5rem}
-.busy{display:flex;gap:.7rem;align-items:center;padding:1rem;background:var(--card);border:1px solid var(--line);border-radius:12px;margin:.8rem 0}
-.spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--ink);animation:sp 1s linear infinite;flex:none}
+.busy{display:flex;gap:.7rem;align-items:center;padding:1rem;background:var(--card);border:1px solid var(--line);border-radius:1rem;margin:.8rem 0}
+.spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--c);animation:sp 1s linear infinite;flex:none}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation-duration:3s}}
-#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:.6rem 1rem;border-radius:10px;font-size:.92rem;z-index:30;max-width:90vw;display:none}
+/* Aviso abajo, como TPV Factu */
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 1rem);transform:translateX(-50%);background:#000;color:#fff;padding:.5rem 1rem;border-radius:.75rem;font-size:.875rem;z-index:60;max-width:90vw;text-align:center;display:none}
 .empty{text-align:center;padding:2rem 1rem;color:var(--muted)}
 .foot{margin:2rem 0 1rem;display:flex;gap:.5rem;flex-wrap:wrap}
-.viewer{position:fixed;inset:0;z-index:40;background:#000;display:flex;align-items:center;justify-content:center}
+.viewer{position:fixed;inset:0;z-index:70;background:#000;display:flex;align-items:center;justify-content:center}
 .viewer img{max-width:100%;max-height:100%}
 .viewer button{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);right:10px;background:#fff;color:#000;border:0;border-radius:999px;width:44px;height:44px;font-size:1.4rem}
 </style>
+<script>
+/* Tema claro / oscuro / automático, como en TPV Factu (se aplica antes de pintar) */
+function aplicarTema(){
+  var t = localStorage.getItem('tema') || 'claro', os = !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches), dark = t === 'oscuro' || (t === 'auto' && os);
+  document.documentElement.classList.toggle('dark', dark);
+  var m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', dark ? '#124f61' : '#1b7f95');
+}
+aplicarTema();
+if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(){ if ((localStorage.getItem('tema') || 'claro') === 'auto') aplicarTema(); });
+</script>
+
 <script>
 /* Si algo impide arrancar la app, se muestra el motivo en pantalla en vez de quedarse en blanco */
 window.mostrarFallo = function(m){
@@ -143,13 +170,12 @@ window.addEventListener('error', function(e){ var a = document.getElementById('a
 </script>
 </head>
 <body>
-<header class="top">
-  <div class="grow"><h1>Trazabilidad</h1><div class="sub">La Piruleta Café Pan</div></div>
+<header class="top" id="nav">
+  <div class="tabsbar" id="tabs"></div>
+  <button class="navbtn" onclick="abrirAjustes()">Ajustes</button>
   <span id="sync" class="badge grey" style="display:none"></span>
-  <button class="btn small" onclick="abrirAjustes()" aria-label="Ajustes">Ajustes</button>
 </header>
 <main class="wrap" id="app"></main>
-<nav class="tabs" id="tabs"></nav>
 <div id="sheet" class="sheet hidden" onclick="if(event.target===this)closeSheet()"><div class="sheet-card" id="sheetBody"></div></div>
 <div id="toast"></div>
 
@@ -179,7 +205,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '4.0.1';
+const APP_VERSION = '4.1';
 const COLS = ['proveedores','documentos','ventas','temporada','equivalencias','ingredientes','reglas'];
 const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}, equivalencias:{}, ingredientes:{}, reglas:{}};
 let pendingRender = false, LISTO = false;
@@ -777,7 +803,7 @@ let TAB = (location.hash || '').slice(1); if (!TABS.some(t => t[0] === TAB)) TAB
 function go(t){ TAB = t; if (location.hash !== '#' + t) location.hash = t; window.scrollTo(0, 0); render(); }
 window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (TABS.some(x => x[0] === t) && t !== TAB){ TAB = t; render(); } });
 function renderTabs(){
-  $('#tabs').innerHTML = TABS.map(([k, l]) => `<button class="${k === TAB ? 'on' : ''}" onclick="go('${k}')" aria-label="${l}">${ICON[k]}<span>${l}</span></button>`).join('');
+  $('#tabs').innerHTML = TABS.map(([k, l]) => `<button class="${k === TAB ? 'on' : ''}" onclick="go('${k}')">${l}</button>`).join('');
 }
 function render(){
   const ae = document.activeElement;
@@ -827,6 +853,7 @@ function vInicio(){
   let h = '';
   if (!hasKey()) h += `<div class="banner warn" style="cursor:pointer" onclick="abrirAjustes()">${leerCfg() && FB.estado !== 'conectado' ? 'Entra con tu cuenta de Google en Ajustes y la clave de Gemini aparecerá sola.' : 'Para leer las fotos automáticamente falta tu clave gratuita de Google Gemini. Toca aquí para ponerla.'}</div>`;
   if (INSTALAR) h += `<div class="banner info"><div class="row"><span class="grow">Instala la app en tu móvil para abrirla como cualquier otra.</span><button class="btn small solid" onclick="instalar()">Instalar</button></div></div>`;
+  h = `<h2 style="margin-top:1rem">La Piruleta Café Pan</h2><p class="note" style="margin-top:0">Trazabilidad · facturas, albaranes, lotes y caducidades</p>` + h;
   h += `<button class="scanbig" onclick="go('escanear')"><b>Escanear factura o albarán</b><span>Haz la foto y se guarda en su proveedor con todos sus productos</span></button>`;
   h += `<div class="stats">
     <div class="stat"><div class="n">${money(gastoMes)}</div><div class="l">Gastado este mes</div></div>
@@ -1933,7 +1960,9 @@ async function borrarVentas(id){ if (!confirm('¿Borrar estas ventas importadas?
 /* ===== Ajustes ===== */
 function abrirAjustes(){
   openSheet(sheetHead('Ajustes') + `
-    <h3>Lectura de fotos (Google Gemini, gratis)</h3>
+    <h3>Apariencia</h3>
+    <div class="chips">${[['claro','Claro'],['oscuro','Oscuro'],['auto','Automático']].map(([k, n]) => `<button class="chip ${(localStorage.getItem('tema') || 'claro') === k ? 'on' : ''}" onclick="cambiarTema('${k}')">${n}</button>`).join('')}</div>
+    <h3 style="margin-top:1.2rem">Lectura de fotos (Google Gemini, gratis)</h3>
     <p class="note">La app usa la inteligencia artificial gratuita de Google para leer facturas, albaranes y etiquetas. Necesitas una clave gratuita (se crea en 1 minuto con tu cuenta de Google). ${leerCfg() ? 'La clave se guarda en este móvil y en tu cuenta, así aparece sola en tus otros móviles.' : 'La clave se guarda solo en este móvil.'}</p>
     <div class="field"><label for="aKey">Clave de Gemini</label><input id="aKey" type="password" autocomplete="off" value="${esc(getKey())}" placeholder="Pega aquí la clave (empieza por AIza…)"></div>
     <div class="row"><button class="btn solid grow" onclick="guardarKey()">Guardar clave</button><button class="btn" onclick="probarKey()" id="aProbar">Probar</button></div>
@@ -1954,6 +1983,7 @@ function abrirAjustes(){
     <div class="row"><button class="btn small" onclick="backup()">Descargar copia</button><button class="btn small" onclick="restaurar()">Restaurar copia</button></div>
     <p class="note" style="margin-top:1rem">Versión ${APP_VERSION}</p>`);
 }
+function cambiarTema(k){ localStorage.setItem('tema', k); aplicarTema(); abrirAjustes(); }
 function guardarKey(){ localStorage.setItem('gemini_key', $('#aKey').value.trim()); localStorage.removeItem('gemini_model'); if (leerCfg()){ localStorage.setItem('gemini_pend', '1'); subirClave(); } toast('Clave guardada'); render(); }
 async function probarKey(){
   guardarKey(); const b = $('#aProbar'); b.disabled = true; b.textContent = 'Probando…'; toast('Probando la clave… puede tardar unos segundos', 8000);
