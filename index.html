@@ -212,7 +212,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '4.3';
+const APP_VERSION = '4.3.1';
 const COLS = ['proveedores','documentos','ventas','temporada','equivalencias','ingredientes','reglas'];
 const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}, equivalencias:{}, ingredientes:{}, reglas:{}};
 let pendingRender = false, LISTO = false;
@@ -548,8 +548,26 @@ function puntosDesde(esq, W, H){
   }
   area = Math.abs(area) / 2;
   if (area < 0.12 * W * H) return null;
-  return q;
+  // Margen de seguridad: abre un 3% hacia fuera para no cortar texto ni logotipos
+  const cx = q.reduce((a, p) => a + p[0], 0) / 4, cy = q.reduce((a, p) => a + p[1], 0) / 4;
+  return q.map(([x, y]) => [Math.min(W, Math.max(0, cx + (x - cx) * 1.03)), Math.min(H, Math.max(0, cy + (y - cy) * 1.03))]);
 }
+// Busca la hoja blanca en la foto (útil en escaneos, capturas de PDF o fotos sobre fondo oscuro)
+function cajaPapel(img){
+  const W = img.width, H = img.height, k = Math.min(1, 400 / Math.max(W, H)), w = Math.max(1, Math.round(W * k)), h = Math.max(1, Math.round(H * k));
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.drawImage(img, 0, 0, w, h);
+  const d = x.getImageData(0, 0, w, h).data, filas = new Uint32Array(h), cols = new Uint32Array(w);
+  for (let y = 0; y < h; y++) for (let xx = 0; xx < w; xx++){ const i = (y * w + xx) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b); if ((r * 299 + g * 587 + b * 114) / 1000 > 200 && mx - mn < 35){ filas[y]++; cols[xx]++; } }
+  let y0 = -1, y1 = -1, x0 = -1, x1 = -1;
+  for (let y = 0; y < h; y++) if (filas[y] > w * 0.3){ if (y0 < 0) y0 = y; y1 = y; }
+  for (let xx = 0; xx < w; xx++) if (cols[xx] > h * 0.3){ if (x0 < 0) x0 = xx; x1 = xx; }
+  if (y0 < 0 || x0 < 0) return null;
+  const caja = {x0:x0 / k, y0:y0 / k, x1:Math.min(W, (x1 + 1) / k), y1:Math.min(H, (y1 + 1) / k)};
+  caja.area = (caja.x1 - caja.x0) * (caja.y1 - caja.y0);
+  return caja.area >= 0.2 * W * H ? caja : null;
+}
+const casiRecto = (p, W, H) => Math.abs(p[0][0] - p[3][0]) < 0.03 * W && Math.abs(p[1][0] - p[2][0]) < 0.03 * W && Math.abs(p[0][1] - p[1][1]) < 0.03 * H && Math.abs(p[3][1] - p[2][1]) < 0.03 * H;
 // Recorta cada foto con las esquinas indicadas. Devuelve páginas recortadas, originales y puntos.
 async function aplicarRecortes(blobs, recortes){
   const out = {blobs:[], origs:[], pts:[]};
@@ -557,9 +575,16 @@ async function aplicarRecortes(blobs, recortes){
     const b = blobs[i]; let pts = null;
     const rc = (Array.isArray(recortes) ? recortes : []).find(r => r && parseInt(r.foto, 10) === i + 1);
     try {
-      if (rc){ const img = await loadImg(b); pts = puntosDesde(rc.esquinas, img.width, img.height);
-        if (pts){ const a = Math.abs((pts[0][0]*pts[1][1]-pts[1][0]*pts[0][1])+(pts[1][0]*pts[2][1]-pts[2][0]*pts[1][1])+(pts[2][0]*pts[3][1]-pts[3][0]*pts[2][1])+(pts[3][0]*pts[0][1]-pts[0][0]*pts[3][1]))/2;
-          if (a > 0.97 * img.width * img.height) pts = null; } }
+      const img = await loadImg(b), W = img.width, H = img.height;
+      if (rc) pts = puntosDesde(rc.esquinas, W, H);
+      // Si la hoja se ve recta sobre un fondo liso (escaneo, captura de PDF, fondo oscuro), se usa el borde real de la hoja
+      const caja = cajaPapel(img);
+      if (caja && (!pts || casiRecto(pts, W, H))){
+        if (caja.area >= 0.97 * W * H) pts = null;
+        else { const mx = (caja.x1 - caja.x0) * 0.01, my = (caja.y1 - caja.y0) * 0.01, X0 = Math.max(0, caja.x0 - mx), Y0 = Math.max(0, caja.y0 - my), X1 = Math.min(W, caja.x1 + mx), Y1 = Math.min(H, caja.y1 + my); pts = [[X0, Y0], [X1, Y0], [X1, Y1], [X0, Y1]]; }
+      }
+      if (pts){ const a = Math.abs((pts[0][0]*pts[1][1]-pts[1][0]*pts[0][1])+(pts[1][0]*pts[2][1]-pts[2][0]*pts[1][1])+(pts[2][0]*pts[3][1]-pts[3][0]*pts[2][1])+(pts[3][0]*pts[0][1]-pts[0][0]*pts[3][1]))/2;
+        if (a > 0.97 * W * H) pts = null; }
       out.blobs.push(await digitalizar(pts ? await enderezar(b, pts) : b));
     } catch(e){ pts = null; out.blobs.push(b); }
     out.origs.push(b); out.pts.push(pts);
@@ -755,7 +780,7 @@ Reglas:
 - "total" es el importe total a pagar con IVA.
 - Si un dato no aparece, pon null. No inventes nada.
 Proveedores ya registrados (si es uno de ellos, usa EXACTAMENTE ese nombre): ${JSON.stringify(provList())}
-RECORTE: añade también "recortes":[{"foto":número de foto,"esquinas":[[x,y],[x,y],[x,y],[x,y]]}] con una entrada por cada foto: las 4 esquinas de la hoja de papel en orden superior izquierda, superior derecha, inferior derecha, inferior izquierda. Coordenadas de 0 a 1000 (x de izquierda a derecha, y de arriba abajo) relativas a la foto. Si una parte de la hoja se sale de la foto, usa el borde de la foto en esa parte.`;
+RECORTE: añade también "recortes":[{"foto":número de foto,"esquinas":[[x,y],[x,y],[x,y],[x,y]]}] con una entrada por cada foto: las 4 esquinas EXTERIORES de la hoja de papel completa (incluyendo márgenes, logotipo, cabecera y pie; nunca dentro de una tabla o recuadro) en orden superior izquierda, superior derecha, inferior derecha, inferior izquierda. Coordenadas de 0 a 1000 (x de izquierda a derecha, y de arriba abajo) relativas a la foto. Si una parte de la hoja se sale de la foto, usa el borde de la foto en esa parte.`;
 }
 function promptLote(n){
   return `Eres el asistente de una cafetería-panadería en España. Te paso ${n} fotos numeradas (Foto 1 a Foto ${n}) de FACTURAS o ALBARANES, normalmente del mismo proveedor.
@@ -772,10 +797,10 @@ Reglas:
 - "total" es el importe total a pagar con IVA.
 - Si un dato no aparece, pon null. No inventes nada.
 Proveedores ya registrados (si es uno de ellos, usa EXACTAMENTE ese nombre): ${JSON.stringify(provList())}
-RECORTE: añade también "recortes":[{"foto":número de foto,"esquinas":[[x,y],[x,y],[x,y],[x,y]]}] con una entrada por cada foto: las 4 esquinas de la hoja de papel en orden superior izquierda, superior derecha, inferior derecha, inferior izquierda. Coordenadas de 0 a 1000 (x de izquierda a derecha, y de arriba abajo) relativas a la foto. Si una parte de la hoja se sale de la foto, usa el borde de la foto en esa parte.`;
+RECORTE: añade también "recortes":[{"foto":número de foto,"esquinas":[[x,y],[x,y],[x,y],[x,y]]}] con una entrada por cada foto: las 4 esquinas EXTERIORES de la hoja de papel completa (incluyendo márgenes, logotipo, cabecera y pie; nunca dentro de una tabla o recuadro) en orden superior izquierda, superior derecha, inferior derecha, inferior izquierda. Coordenadas de 0 a 1000 (x de izquierda a derecha, y de arriba abajo) relativas a la foto. Si una parte de la hoja se sale de la foto, usa el borde de la foto en esa parte.`;
 }
 function promptEsquinas(n){
-  return `Te paso ${n} foto${n === 1 ? '' : 's'} numerada${n === 1 ? '' : 's'} de documentos en papel (facturas o albaranes). Para cada foto, localiza las 4 esquinas de la hoja de papel.
+  return `Te paso ${n} foto${n === 1 ? '' : 's'} numerada${n === 1 ? '' : 's'} de documentos en papel (facturas o albaranes). Para cada foto, localiza las 4 esquinas EXTERIORES de la hoja de papel completa, incluyendo márgenes, logotipo, cabecera y pie. Nunca uses las esquinas de una tabla o recuadro interior. Si dudas, deja algo más de margen: es mejor que sobre fondo a que se corte texto.
 Responde SOLO con un objeto JSON: {"recortes":[{"foto":número de foto,"esquinas":[[x,y],[x,y],[x,y],[x,y]]}]}
 Orden de las esquinas: superior izquierda, superior derecha, inferior derecha, inferior izquierda. Coordenadas de 0 a 1000 (x de izquierda a derecha, y de arriba abajo) relativas a la foto. Si la hoja ocupa toda la foto, usa las esquinas de la foto. Si una parte de la hoja se sale de la foto, usa el borde de la foto en esa parte.`;
 }
