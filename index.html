@@ -212,7 +212,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '4.2.1';
+const APP_VERSION = '4.2.2';
 const COLS = ['proveedores','documentos','ventas','temporada','equivalencias','ingredientes','reglas'];
 const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}, equivalencias:{}, ingredientes:{}, reglas:{}};
 let pendingRender = false, LISTO = false;
@@ -740,13 +740,15 @@ Reglas:
 - Si no se lee un dato, pon null. No inventes nada.`;
 }
 function promptVentas(texto){
-  return `Te paso ${texto ? 'el contenido de un archivo exportado' : 'la foto de un informe'} de ventas del TPV de una cafetería. Extrae las ventas por artículo.
+  return `Te paso ${texto ? 'el contenido de un archivo exportado' : 'la foto (o varias fotos de un mismo ticket largo) de un informe o cierre de caja'} de ventas del TPV de una cafetería (por ejemplo un cierre Z de Sysme). Extrae las ventas.
 Responde SOLO con un objeto JSON:
-{"desde":"AAAA-MM-DD"|null,"hasta":"AAAA-MM-DD"|null,"items":[{"producto":string,"cantidad":number|null,"importe":number|null}]}
+{"desde":"AAAA-MM-DD"|null,"hasta":"AAAA-MM-DD"|null,"total":number|null,"items":[{"producto":string,"cantidad":number|null,"importe":number|null}]}
 Reglas:
-- Agrupa por artículo sumando cantidades e importes si el mismo artículo aparece varias veces.
+- "total": importe TOTAL vendido en el informe, con IVA (el total del cierre o total de ventas). Números con punto decimal.
+- "items": ventas por artículo, con el nombre tal como aparece. Agrupa sumando si el mismo artículo aparece varias veces. Si el informe no detalla artículos (solo totales, familias o formas de pago), deja "items" vacío.
+- No metas en "items" totales generales, impuestos, formas de pago, descuentos ni cambios de caja.
 - "desde" y "hasta": primer y último día que cubre el informe (si es de un solo día, la misma fecha).
-- Ignora totales generales, impuestos, formas de pago y descuentos.
+- Si varias fotos son partes del mismo ticket, júntalas sin repetir líneas.
 - Si no aparece un dato, pon null.${texto ? '\n\nCONTENIDO DEL ARCHIVO:\n' + texto : ''}`;
 }
 
@@ -1513,6 +1515,7 @@ function vInformes(){
   const pv = Object.entries(c.porProv).sort((a, b) => b[1] - a[1]); const max = pv.length ? pv[0][1] || 1 : 1;
   h += `<h2>Gasto por proveedor</h2>` + (pv.length ? `<div class="bars">${pv.map(([n, g]) => `<div class="bar"><div class="lab"><span>${esc(n)}</span><b>${money(g)}</b></div><div class="track"><div class="fill" style="width:${Math.max(2, g / max * 100)}%"></div></div></div>`).join('')}</div>` : `<p class="note">Sin compras en este periodo.</p>`);
   h += `<h2>Lo que más vendes</h2>`;
+  v.prods = v.prods.filter(p => !/^total del cierre/i.test(p.nombre));
   if (v.prods.length) h += `<p class="note">Con los nombres de TPV Factu. Calculado sobre ${v.dias} día${v.dias === 1 ? '' : 's'} de ventas.</p>` + tabla(['Artículo','Unidades','Importe'], v.prods.sort((a, b) => b.cantidad - a.cantidad).slice(0, 60).map(p => [esc(p.nombre), qty(p.cantidad), money(p.importe)]), [1,2]);
   else h += `<p class="note">Aquí saldrán los artículos de TPV Factu en cuanto se envíe el primer cierre de caja.</p>`;
   h += `<h2>Lo que más compras</h2>`;
@@ -1951,16 +1954,20 @@ function tabla(cols, rows, numCols){
 let VENTA = null;
 async function importarVentas(foto){
   if (!hasKey()){ toast(errMsg({code:'no_key'}), 5000); return abrirAjustes(); }
-  const files = foto ? await pickFiles({camera:true}) : await pickFiles({accept:'.csv,.txt,.tsv,text/csv,text/plain'});
+  let files = foto ? await pickFiles({camera:true}) : await pickFiles({accept:'.csv,.txt,.tsv,text/csv,text/plain'});
   if (!files.length) return;
+  if (foto){ while (files.length < 4 && confirm('¿El ticket es largo y quieres hacer otra foto del mismo cierre?')){ const mas = await pickFiles({camera:true}); if (!mas.length) break; files = files.concat(mas); } }
   openSheet(sheetHead('Importar ventas') + `<div class="busy"><div class="spin"></div><div>Leyendo las ventas… puede tardar hasta un minuto.</div></div>`);
   try {
     let r;
-    if (foto){ const b = await compress(files[0]); r = await askJSON(promptVentas(null), [b]); }
+    if (foto){ const bs = []; for (const f of files) bs.push(await compress(f, 2000, 0.85)); r = await askJSON(promptVentas(null), bs, bs.length > 1); }
     else { const txt = (await files[0].text()).slice(0, 120000); r = await askJSON(promptVentas(txt)); }
     const hoy = iso(new Date());
     VENTA = {desde:validIso(r && r.desde) ? r.desde : hoy, hasta:validIso(r && r.hasta) ? r.hasta : (validIso(r && r.desde) ? r.desde : hoy),
-      items:((r && r.items) || []).filter(x => x && x.producto).map(x => ({producto:String(x.producto), cantidad:num(x.cantidad), importe:num(x.importe)}))};
+      items:((r && r.items) || []).filter(x => x && x.producto).map(x => ({producto:String(x.producto), cantidad:num(x.cantidad), importe:num(x.importe)})), total:num(r && r.total)};
+    const suma = VENTA.items.reduce((a, x) => a + (x.importe || 0), 0);
+    if (!VENTA.items.length && VENTA.total != null) VENTA.items = [{producto:'Total del cierre (sin detalle por artículo)', cantidad:null, importe:VENTA.total}];
+    VENTA.aviso = VENTA.total != null && VENTA.items.length && Math.abs(suma - VENTA.total) > 1 && suma > 0 ? 'La suma de los artículos (' + money(suma) + ') no coincide con el total del cierre (' + money(VENTA.total) + '). Revisa la foto o guarda solo el total.' : '';
     pintarVentas();
   } catch(e){ closeSheet(); toast(errMsg(e), 6000); }
 }
@@ -1968,8 +1975,12 @@ function pintarVentas(){
   openSheet(sheetHead('Revisa las ventas') + `<p class="note">Comprueba las fechas: deben ser los días que cubre el informe.</p>
     <div class="grid2"><div class="field"><label for="vDesde">Desde</label><input type="date" id="vDesde" value="${VENTA.desde}"></div><div class="field"><label for="vHasta">Hasta</label><input type="date" id="vHasta" value="${VENTA.hasta}"></div></div>
     <div class="tablewrap"><table><thead><tr><th>Producto</th><th class="num">Uds.</th><th class="num">Importe</th></tr></thead><tbody>${VENTA.items.map(x => `<tr><td>${esc(x.producto)}</td><td class="num">${qty(x.cantidad)}</td><td class="num">${money(x.importe)}</td></tr>`).join('')}</tbody></table></div>
+    <p class="note"><b>Total: ${money(VENTA.items.reduce((a, x) => a + (x.importe || 0), 0))}</b></p>
+    ${VENTA.aviso ? `<div class="banner warn">${esc(VENTA.aviso)}<div class="row" style="margin-top:.5rem"><button class="btn small" onclick="soloTotalVentas()">Guardar solo el total del cierre</button></div></div>` : ''}
+    ${VENTA.items.length ? '' : '<div class="banner warn">No se ha podido leer ni el total ni los artículos. Repite la foto con más luz y el ticket entero.</div>'}
     <div class="row" style="margin-top:1rem"><button class="btn solid grow" onclick="guardarVentas()" ${VENTA.items.length ? '' : 'disabled'}>Guardar ventas</button></div>`);
 }
+function soloTotalVentas(){ if ($('#vDesde')){ VENTA.desde = $('#vDesde').value || VENTA.desde; VENTA.hasta = $('#vHasta').value || VENTA.hasta; } VENTA.items = [{producto:'Total del cierre (sin detalle por artículo)', cantidad:null, importe:VENTA.total}]; VENTA.aviso = ''; pintarVentas(); }
 async function guardarVentas(){
   const desde = $('#vDesde').value, hasta = $('#vHasta').value;
   if (!validIso(desde) || !validIso(hasta) || hasta < desde) return toast('Revisa las fechas');
