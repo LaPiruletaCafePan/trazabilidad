@@ -130,6 +130,16 @@ th{color:var(--muted);font-size:.75rem;font-weight:700}
 td.num,th.num{text-align:right}
 td.num{font-family:'Space Mono',monospace;font-size:.8rem}
 tr:last-child td{border-bottom:0}
+/* Secciones desplegables de Informes */
+details.seccion{background:var(--card);border:1px solid var(--line);border-radius:1rem;margin:.6rem 0;overflow:hidden}
+details.seccion>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:.6rem;padding:.85rem 1rem;font-weight:800}
+details.seccion>summary::-webkit-details-marker{display:none}
+details.seccion>summary .st{flex:1;font-size:1rem}
+details.seccion>summary .sr{font-size:.8rem;font-weight:600;color:var(--muted);white-space:nowrap}
+details.seccion>summary::after{content:"";width:.55rem;height:.55rem;border-right:2.5px solid var(--c);border-bottom:2.5px solid var(--c);transform:rotate(45deg);margin:0 .2rem .25rem .3rem;transition:transform .15s}
+details.seccion[open]>summary::after{transform:rotate(-135deg);margin-bottom:-.15rem}
+details.seccion>.sc{padding:0 .75rem .9rem}
+details.seccion .tablewrap{border-radius:.8rem}
 /* Ventanas: centradas como los modales de TPV Factu */
 .sheet{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.5);display:grid;place-items:center;padding:1rem}
 .sheet.hidden{display:none}
@@ -212,7 +222,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '4.4';
+const APP_VERSION = '4.5';
 const COLS = ['proveedores','documentos','ventas','temporada','equivalencias','ingredientes','reglas'];
 const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}, equivalencias:{}, ingredientes:{}, reglas:{}};
 let pendingRender = false, LISTO = false;
@@ -1597,6 +1607,25 @@ function aggVentas(desde){
   const prods = Object.values(map).map(m => { const pdia = dias ? m.cantidad / dias : 0; return {...m, frec: pdia >= 1 ? qty(pdia) + ' al día' : qty(pdia * 7) + ' a la semana'}; });
   return {dias, total, prods};
 }
+/* Secciones desplegables (recuerdan si las dejaste abiertas) */
+function seccion(clave, titulo, resumen, cuerpo){
+  const abierta = localStorage.getItem('sec_' + clave) === '1';
+  return `<details class="seccion" ${abierta ? 'open' : ''} ontoggle="localStorage.setItem('sec_${clave}', this.open ? '1' : '0')"><summary><span class="st">${titulo}</span><span class="sr">${resumen}</span></summary><div class="sc">${cuerpo}</div></details>`;
+}
+function editarVentas(id){
+  const x = S.ventas[id]; if (!x) return;
+  const unico = (x.items || []).length === 1;
+  openSheet(sheetHead('Cambiar fecha') + `<p class="note">Un cierre de caja diario debe tener la misma fecha en «Desde» y «Hasta».</p>
+    <div class="grid2"><div class="field"><label for="evD">Desde</label><input type="date" id="evD" value="${esc(x.desde)}"></div><div class="field"><label for="evH">Hasta</label><input type="date" id="evH" value="${esc(x.hasta)}"></div></div>
+    ${unico ? `<div class="field"><label for="evI">Importe (€)</label><input id="evI" inputmode="decimal" value="${x.items[0].importe ?? ''}"></div>` : ''}
+    <div class="row" style="margin-top:.8rem"><button class="btn solid grow" onclick="guardarEdicionVentas('${id}')">Guardar</button></div>`);
+}
+async function guardarEdicionVentas(id){
+  const x = JSON.parse(JSON.stringify(S.ventas[id])); const d = $('#evD').value, h = $('#evH').value;
+  if (!validIso(d) || !validIso(h) || h < d) return toast('Revisa las fechas');
+  x.desde = d; x.hasta = h; if ($('#evI')){ const v = num($('#evI').value); if (v == null) return toast('Revisa el importe'); x.items[0].importe = v; }
+  await Store.save('ventas', id, x); closeSheet(); toast('Guardado');
+}
 function vInformes(){
   const desde = desdePeriodo(); const c = aggCompras(desde); const v = aggVentas(desde);
   const dif = v.total - c.total;
@@ -1609,26 +1638,28 @@ function vInformes(){
     const d = dias[k] || (dias[k] = {ventas:0, compras:0, origenes:new Set()}); d.ventas += (x.items || []).reduce((a, it) => a + (it.importe || 0), 0); d.origenes.add(x.origen === 'tpv' ? 'tpv' : 'otro'); });
   Object.values(S.documentos).forEach(d => { if (!validIso(d.fecha) || (desde && d.fecha < desde)) return; const x = dias[d.fecha] || (dias[d.fecha] = {ventas:0, compras:0, origenes:new Set()}); x.compras += docTotal(d); });
   const filas = Object.entries(dias).sort((a, b) => b[0].localeCompare(a[0]));
-  h += `<h2>Ventas y compras por día</h2><p class="note">Cada día con su cierre de caja del TPV y lo que compraste ese día.</p>`;
-  h += filas.length ? tabla(['Día','Ventas','Compras','Dif.'], filas.slice(0, 120).map(([k, d]) => { const df = d.ventas - d.compras; const fecha = k.includes('|') ? fdate(k.split('|')[0]) + ' – ' + fdate(k.split('|')[1]) : fdate(k);
+  let hd = `<p class="note">Cada día con su cierre de caja del TPV y lo que compraste ese día.</p>`;
+  hd += filas.length ? tabla(['Día','Ventas','Compras','Dif.'], filas.slice(0, 120).map(([k, d]) => { const df = d.ventas - d.compras; const fecha = k.includes('|') ? fdate(k.split('|')[0]) + ' – ' + fdate(k.split('|')[1]) : fdate(k);
       return [fecha + (d.origenes.size > 1 ? ' <span class="badge red">repetido</span>' : ''), d.ventas ? money(d.ventas) : '—', d.compras ? money(d.compras) : '—', `<span style="color:${df < 0 ? 'var(--stamp)' : 'var(--ok)'}">${money(df)}</span>`]; }), [1,2,3])
     : `<p class="note">Aún no hay ventas ni compras en este periodo.</p>`;
-  if (filas.some(([, d]) => d.origenes.size > 1)) h += `<p class="note">«Repetido»: ese día tiene ventas del TPV y también importadas a mano; borra la importada abajo para que no se sumen dos veces.</p>`;
+  if (filas.some(([, d]) => d.origenes.size > 1)) hd += `<p class="note">«Repetido»: ese día tiene ventas del TPV y también importadas a mano; borra la importada abajo para que no se sumen dos veces.</p>`;
+  h += seccion('dias', 'Ventas y compras por día', filas.length + ' día' + (filas.length === 1 ? '' : 's'), hd);
   // Por meses
   const meses = {};
   filas.forEach(([k, d]) => { const m = k.slice(0, 7); const x = meses[m] || (meses[m] = {ventas:0, compras:0}); x.ventas += d.ventas; x.compras += d.compras; });
-  if (Object.keys(meses).length > 1) h += `<h2>Por meses</h2>` + tabla(['Mes','Ventas','Compras','Dif.'], Object.entries(meses).sort((a, b) => b[0].localeCompare(a[0])).map(([m, x]) => [nombreMes(m), money(x.ventas), money(x.compras), `<span style="color:${x.ventas - x.compras < 0 ? 'var(--stamp)' : 'var(--ok)'}">${money(x.ventas - x.compras)}</span>`]), [1,2,3]);
+  if (Object.keys(meses).length) h += seccion('meses', 'Por meses', Object.keys(meses).length + ' mes' + (Object.keys(meses).length === 1 ? '' : 'es'), tabla(['Mes','Ventas','Compras','Dif.'], Object.entries(meses).sort((a, b) => b[0].localeCompare(a[0])).map(([m, x]) => [nombreMes(m), money(x.ventas), money(x.compras), `<span style="color:${x.ventas - x.compras < 0 ? 'var(--stamp)' : 'var(--ok)'}">${money(x.ventas - x.compras)}</span>`]), [1,2,3]));
   const pv = Object.entries(c.porProv).sort((a, b) => b[1] - a[1]); const max = pv.length ? pv[0][1] || 1 : 1;
-  h += `<h2>Gasto por proveedor</h2>` + (pv.length ? `<div class="bars">${pv.map(([n, g]) => `<div class="bar"><div class="lab"><span>${esc(n)}</span><b>${money(g)}</b></div><div class="track"><div class="fill" style="width:${Math.max(2, g / max * 100)}%"></div></div></div>`).join('')}</div>` : `<p class="note">Sin compras en este periodo.</p>`);
-  h += `<h2>Lo que más vendes</h2>`;
+  h += seccion('proveedores', 'Gasto por proveedor', pv.length + ' proveedor' + (pv.length === 1 ? '' : 'es') + ' · ' + money(c.total), pv.length ? `<div class="bars">${pv.map(([n, g]) => `<div class="bar"><div class="lab"><span>${esc(n)}</span><b>${money(g)}</b></div><div class="track"><div class="fill" style="width:${Math.max(2, g / max * 100)}%"></div></div></div>`).join('')}</div>` : `<p class="note">Sin compras en este periodo.</p>`);
   v.prods = v.prods.filter(p => !/^total del cierre/i.test(p.nombre));
-  if (v.prods.length) h += `<p class="note">Con los nombres de TPV Factu. Calculado sobre ${v.dias} día${v.dias === 1 ? '' : 's'} de ventas.</p>` + tabla(['Artículo','Unidades','Importe'], v.prods.sort((a, b) => b.cantidad - a.cantidad).slice(0, 60).map(p => [esc(p.nombre), qty(p.cantidad), money(p.importe)]), [1,2]);
-  else h += `<p class="note">Aquí saldrán los artículos de TPV Factu en cuanto se envíe el primer cierre de caja.</p>`;
-  h += `<h2>Lo que más compras</h2>`;
-  h += c.prods.length ? tabla(['Producto','Veces','Cantidad','Gasto','Frecuencia'], c.prods.sort((a, b) => b.gasto - a.gasto || b.veces - a.veces).slice(0, 40).map(p => [esc(p.nombre), p.veces, qty(p.cantidad) + ' ' + esc(p.unidad), money(p.gasto), p.frec]), [1,2,3]) : `<p class="note">Sin compras en este periodo.</p>`;
+  let hv = '';
+  if (v.prods.length) hv += `<p class="note">Con los nombres de TPV Factu. Calculado sobre ${v.dias} día${v.dias === 1 ? '' : 's'} de ventas.</p>` + tabla(['Artículo','Unidades','Importe'], v.prods.sort((a, b) => b.cantidad - a.cantidad).slice(0, 60).map(p => [esc(p.nombre), qty(p.cantidad), money(p.importe)]), [1,2]);
+  else hv += `<p class="note">Aquí saldrán los artículos de TPV Factu en cuanto se envíe el primer cierre de caja.</p>`;
+  h += seccion('vendes', 'Lo que más vendes', v.prods.length + ' artículo' + (v.prods.length === 1 ? '' : 's'), hv);
+  h += seccion('compras', 'Lo que más compras', c.prods.length + ' producto' + (c.prods.length === 1 ? '' : 's'), c.prods.length ? tabla(['Producto','Veces','Cantidad','Gasto','Frecuencia'], c.prods.sort((a, b) => b.gasto - a.gasto || b.veces - a.veces).slice(0, 40).map(p => [esc(p.nombre), p.veces, qty(p.cantidad) + ' ' + esc(p.unidad), money(p.gasto), p.frec]), [1,2,3]) : `<p class="note">Sin compras en este periodo.</p>`);
   const imps = Object.entries(S.ventas).sort((a, b) => (b[1].hasta || '').localeCompare(a[1].hasta || ''));
-  h += `<h2>Ventas recibidas</h2><p class="note">Cada cierre de TPV Factu llega aquí solo. Si alguno sobra (por ejemplo, una importación a mano repetida), bórralo.</p>`;
-  if (imps.length) h += `<div class="list">${imps.slice(0, 60).map(([id, x]) => `<div class="item" style="cursor:default"><div class="row" style="justify-content:space-between"><span class="t">${x.desde === x.hasta ? fdate(x.desde) : fdate(x.desde) + ' – ' + fdate(x.hasta)}</span><span class="badge ${x.origen === 'tpv' ? 'green' : 'grey'}">${x.origen === 'tpv' ? 'TPV Factu' : 'Importada a mano'}</span></div><div class="m">${money((x.items || []).reduce((a, it) => a + (it.importe || 0), 0))} · ${(x.items || []).length} artículos</div><div class="row" style="margin-top:.4rem"><button class="btn small danger" onclick="borrarVentas('${id}')">Borrar</button></div></div>`).join('')}</div>`;
+  let hr = `<p class="note">Cada cierre de TPV Factu llega aquí solo. Si alguno sobra (por ejemplo, una importación a mano repetida), bórralo. Si una fecha está mal, cámbiala.</p>`;
+  if (imps.length) hr += `<div class="list">${imps.slice(0, 60).map(([id, x]) => `<div class="item" style="cursor:default"><div class="row" style="justify-content:space-between"><span class="t">${x.desde === x.hasta ? fdate(x.desde) : fdate(x.desde) + ' – ' + fdate(x.hasta)}</span><span class="badge ${x.origen === 'tpv' ? 'green' : 'grey'}">${x.origen === 'tpv' ? 'TPV Factu' : 'Importada a mano'}</span></div><div class="m">${money((x.items || []).reduce((a, it) => a + (it.importe || 0), 0))} · ${(x.items || []).length} artículos</div><div class="row" style="margin-top:.4rem"><button class="btn small" onclick="editarVentas('${id}')">Cambiar fecha</button><button class="btn small danger" onclick="borrarVentas('${id}')">Borrar</button></div></div>`).join('')}</div>`;
+  h += seccion('recibidas', 'Ventas recibidas', imps.length + ' cierre' + (imps.length === 1 ? '' : 's'), hr);
   h += `<p class="note" style="margin-top:1rem">¿Te falta algún día? Puedes importarlo a mano:</p><div class="row"><button class="btn small" onclick="importarVentas(true)">Foto del informe de ventas</button><button class="btn small" onclick="importarVentas(false)">Archivo CSV o texto</button></div>`;
   return h;
 }
