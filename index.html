@@ -212,7 +212,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '4.3.1';
+const APP_VERSION = '4.4';
 const COLS = ['proveedores','documentos','ventas','temporada','equivalencias','ingredientes','reglas'];
 const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}, equivalencias:{}, ingredientes:{}, reglas:{}};
 let pendingRender = false, LISTO = false;
@@ -573,6 +573,7 @@ async function aplicarRecortes(blobs, recortes){
   const out = {blobs:[], origs:[], pts:[]};
   for (let i = 0; i < blobs.length; i++){
     const b = blobs[i]; let pts = null;
+    if (BLOBS_PDF.has(b)){ out.blobs.push(b); out.origs.push(b); out.pts.push(null); continue; }
     const rc = (Array.isArray(recortes) ? recortes : []).find(r => r && parseInt(r.foto, 10) === i + 1);
     try {
       const img = await loadImg(b), W = img.width, H = img.height;
@@ -1005,12 +1006,41 @@ function vEscanear(){
   let h = `<h2>Escanear factura o albarán</h2><p class="note">Pon el papel sobre una superficie lisa, con buena luz y entero en la foto. Si tiene varias páginas, añádelas todas antes de leer.</p>`;
   if (PAGINAS.length) h += `<div class="thumbs">${PAGINAS.map((p, i) => `<img src="${p.url}" alt="Página ${i + 1}" onclick="quitarPagina(${i})">`).join('')}</div><p class="note">${PAGINAS.length} página${PAGINAS.length === 1 ? '' : 's'}. Toca una para quitarla.</p>`;
   if (LEYENDO) return h + `<div class="busy"><div class="spin"></div><div>${esc(LEYENDO_TXT || 'Leyendo el documento… suele tardar entre 20 y 60 segundos.')}</div></div>`;
-  h += `<div class="row" style="margin-top:.6rem"><button class="btn solid grow" onclick="addPagina(true)">${PAGINAS.length ? 'Añadir otra página' : 'Hacer foto'}</button><button class="btn grow" onclick="addPagina(false)">Elegir de la galería</button></div>`;
+  h += `<div class="row" style="margin-top:.6rem"><button class="btn solid grow" onclick="addPagina(true)">${PAGINAS.length ? 'Añadir otra página' : 'Hacer foto'}</button><button class="btn grow" onclick="addPagina(false)">Elegir de la galería</button></div>
+    <div class="row" style="margin-top:.5rem"><button class="btn grow" onclick="addPDF()">Subir factura en PDF</button></div>
+    <p class="note">¿Te llega la factura por correo en PDF? Descárgala al móvil y pulsa «Subir factura en PDF». Puedes elegir varios PDF a la vez.</p>`;
   if (LOTE && LOTE.items.some(it => it.estado === 'pendiente')) h = `<div class="banner warn" style="cursor:pointer" onclick="pintarLote()">Tienes ${LOTE.items.filter(it => it.estado === 'pendiente').length} documentos leídos sin guardar. Toca para verlos.</div>` + h;
   if (PAGINAS.length) h += `<button class="scanbig" onclick="leerDocumento()"><b>Leer como UN documento</b><span>Todas las fotos son páginas de la misma factura o albarán</span></button>`;
   if (PAGINAS.length > 1) h += `<button class="scanbig" style="background:var(--card);color:var(--ink);border:2px solid var(--ink)" onclick="leerLote()"><b>Leer como VARIAS facturas</b><span>Cada foto es una factura o albarán distinto del mismo proveedor. La app agrupa sola las que tengan varias páginas.</span></button>`;
   h += `<div class="row" style="margin-top:1rem"><button class="btn small" onclick="nuevoManual()">Introducir a mano</button></div>`;
   return h;
+}
+/* ===== Facturas en PDF: cada página se convierte en imagen (ya viene recta y limpia) ===== */
+const PDFJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const BLOBS_PDF = new WeakSet();
+async function pdfAImagenes(file){
+  await cargarScript(PDFJS_URL); const L = window.pdfjsLib; L.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+  const doc = await L.getDocument({data:await file.arrayBuffer()}).promise;
+  const out = [], n = Math.min(doc.numPages, 20);
+  for (let i = 1; i <= n; i++){
+    const pg = await doc.getPage(i), v1 = pg.getViewport({scale:1}), vp = pg.getViewport({scale:Math.min(3, 1800 / Math.max(v1.width, v1.height))});
+    const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    await pg.render({canvasContext:x, viewport:vp}).promise;
+    const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85)); BLOBS_PDF.add(b); out.push(b);
+  }
+  if (doc.numPages > 20) toast('El PDF tiene ' + doc.numPages + ' páginas: se han añadido las 20 primeras.', 6000);
+  return out;
+}
+async function addPDF(){
+  const files = await pickFiles({accept:'application/pdf,.pdf', multiple:true}); if (!files.length) return;
+  toast('Abriendo PDF…', 6000); let n = 0;
+  for (const f of files){
+    try { const bs = await pdfAImagenes(f); bs.forEach(b => PAGINAS.push({blob:b, url:URL.createObjectURL(b), pdf:true})); n += bs.length; }
+    catch(e){ toast('No se pudo abrir «' + f.name + '»' + (e && /password/i.test(e.name + e.message) ? ': tiene contraseña.' : '. Comprueba que es un PDF y que hay internet.'), 7000); }
+  }
+  if (n) toast(n + ' página' + (n === 1 ? '' : 's') + ' añadida' + (n === 1 ? '' : 's') + ' desde PDF');
+  render();
 }
 async function addPagina(camera){
   const files = await pickFiles({camera, multiple:!camera});
@@ -1044,7 +1074,7 @@ function borradorDesde(r){
 }
 async function nuevoManual(){
   const origs = PAGINAS.map(p => p.blob); PAGINAS = []; render();
-  const blobs = []; for (const b of origs){ try { blobs.push(await digitalizar(b)); } catch(e){ blobs.push(b); } }
+  const blobs = []; for (const b of origs){ try { blobs.push(BLOBS_PDF.has(b) ? b : await digitalizar(b)); } catch(e){ blobs.push(b); } }
   abrirEditor({id:uid(), tipo:'albaran', proveedorId:'', proveedorNuevo:'', cif:'', telefono:'', numero:'', fecha:iso(new Date()), total:null, fotos:[], lineas:[]}, blobs, true, {origs, pts:origs.map(() => null)});
 }
 
@@ -1287,6 +1317,7 @@ async function guardarBorrador(d, blobs, envases, provId, extra){
   while (fotosOrig.length < fotos.length) fotosOrig.push('');
   let recortado = !!d.recortado; let digitalizado = !!d.digitalizado || modoEscaneo() !== 'no';
   for (const [k, b] of Object.entries(extra.reempl || {})){ const i = +k; if (!fotos[i]) continue; if (!fotosOrig[i]) fotosOrig[i] = fotos[i]; fotos[i] = await guardarFoto(b); recortado = true; }
+  if ((blobs || []).length && blobs.every(b => BLOBS_PDF.has(b))){ recortado = true; digitalizado = true; }
   for (let j = 0; j < (blobs || []).length; j++){
     const b = blobs[j], o = (extra.origs || [])[j];
     fotos.push(await guardarFoto(b));
