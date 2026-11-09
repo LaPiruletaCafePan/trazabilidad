@@ -222,7 +222,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 function toast(msg, ms = 3500){ const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
 
 /* ===== Datos (guardados en el propio móvil) ===== */
-const APP_VERSION = '4.5';
+const APP_VERSION = '4.6';
 const COLS = ['proveedores','documentos','ventas','temporada','equivalencias','ingredientes','reglas'];
 const S = {proveedores:{}, documentos:{}, ventas:{}, temporada:{}, equivalencias:{}, ingredientes:{}, reglas:{}};
 let pendingRender = false, LISTO = false;
@@ -781,7 +781,7 @@ const provList = () => Object.values(S.proveedores).map(p => p.nombre).filter(Bo
 function promptFactura(){
   return `Eres el asistente de una cafetería-panadería en España. Te paso la foto (o varias páginas, numeradas Foto 1, Foto 2…) de una FACTURA o ALBARÁN de un proveedor.
 Extrae los datos y responde SOLO con un objeto JSON con esta forma exacta:
-{"tipo":"factura"|"albaran","proveedor":{"nombre":string,"cif":string|null,"telefono":string|null},"numero":string|null,"fecha":"AAAA-MM-DD"|null,"total":number|null,"lineas":[{"producto":string,"cantidad":number|null,"unidad":string|null,"precio":number|null,"importe":number|null,"lote":string|null,"caducidad":"AAAA-MM-DD"|null}]}
+{"tipo":"factura"|"albaran","proveedor":{"nombre":string,"cif":string|null,"telefono":string|null},"numero":string|null,"fecha":"AAAA-MM-DD"|null,"total":number|null,"albaranes":[{"numero":string|null,"fecha":"AAAA-MM-DD"|null}],"lineas":[{"producto":string,"cantidad":number|null,"unidad":string|null,"precio":number|null,"importe":number|null,"lote":string|null,"caducidad":"AAAA-MM-DD"|null}]}
 Reglas:
 - El proveedor es quien EMITE el documento (no el cliente La Piruleta Café Pan C.B.).
 - Números con punto decimal, sin símbolo de euro. "precio" es el precio por unidad sin IVA si se ve; "importe" es el total de esa línea.
@@ -789,6 +789,7 @@ Reglas:
 - "unidad": ud, caja, kg, l, paquete… según figure.
 - Si el documento indica lote o caducidad por línea, inclúyelos; si no, null.
 - "total" es el importe total a pagar con IVA.
+- "albaranes": solo en FACTURAS, los albaranes o notas de entrega que incluye (por ejemplo «Albarán nº», «Doc. Nº», «Nota de entrega») con su número y fecha. Si no se mencionan, lista vacía.
 - Si un dato no aparece, pon null. No inventes nada.
 Proveedores ya registrados (si es uno de ellos, usa EXACTAMENTE ese nombre): ${JSON.stringify(provList())}
 RECORTE: añade también "recortes":[{"foto":número de foto,"esquinas":[[x,y],[x,y],[x,y],[x,y]]}] con una entrada por cada foto: las 4 esquinas EXTERIORES de la hoja de papel completa (incluyendo márgenes, logotipo, cabecera y pie; nunca dentro de una tabla o recuadro) en orden superior izquierda, superior derecha, inferior derecha, inferior izquierda. Coordenadas de 0 a 1000 (x de izquierda a derecha, y de arriba abajo) relativas a la foto. Si una parte de la hoja se sale de la foto, usa el borde de la foto en esa parte.`;
@@ -798,7 +799,7 @@ function promptLote(n){
 Cada foto puede ser un documento distinto o una página más del documento de la foto anterior (por ejemplo «página 2 de 2», o una continuación sin cabecera con el mismo número).
 Agrupa las fotos por documento y extrae los datos de cada documento. Si dos fotos son el MISMO documento fotografiado dos veces, inclúyelo una sola vez con ambas fotos en "paginas".
 Responde SOLO con un objeto JSON con esta forma exacta:
-{"documentos":[{"paginas":[número de foto,...],"tipo":"factura"|"albaran","proveedor":{"nombre":string,"cif":string|null,"telefono":string|null},"numero":string|null,"fecha":"AAAA-MM-DD"|null,"total":number|null,"lineas":[{"producto":string,"cantidad":number|null,"unidad":string|null,"precio":number|null,"importe":number|null,"lote":string|null,"caducidad":"AAAA-MM-DD"|null}]}]}
+{"documentos":[{"paginas":[número de foto,...],"tipo":"factura"|"albaran","proveedor":{"nombre":string,"cif":string|null,"telefono":string|null},"numero":string|null,"fecha":"AAAA-MM-DD"|null,"total":number|null,"albaranes":[{"numero":string|null,"fecha":"AAAA-MM-DD"|null}],"lineas":[{"producto":string,"cantidad":number|null,"unidad":string|null,"precio":number|null,"importe":number|null,"lote":string|null,"caducidad":"AAAA-MM-DD"|null}]}]}
 Reglas:
 - Cada foto debe aparecer en las "paginas" de exactamente un documento.
 - El proveedor es quien EMITE el documento (no el cliente La Piruleta Café Pan C.B.).
@@ -806,6 +807,7 @@ Reglas:
 - "producto": nombre legible del artículo, sin códigos internos. "unidad": ud, caja, kg, l, paquete… según figure.
 - Si el documento indica lote o caducidad por línea, inclúyelos; si no, null.
 - "total" es el importe total a pagar con IVA.
+- "albaranes": solo en FACTURAS, los albaranes o notas de entrega que incluye (por ejemplo «Albarán nº», «Doc. Nº», «Nota de entrega») con su número y fecha. Si no se mencionan, lista vacía.
 - Si un dato no aparece, pon null. No inventes nada.
 Proveedores ya registrados (si es uno de ellos, usa EXACTAMENTE ese nombre): ${JSON.stringify(provList())}
 RECORTE: añade también "recortes":[{"foto":número de foto,"esquinas":[[x,y],[x,y],[x,y],[x,y]]}] con una entrada por cada foto: las 4 esquinas EXTERIORES de la hoja de papel completa (incluyendo márgenes, logotipo, cabecera y pie; nunca dentro de una tabla o recuadro) en orden superior izquierda, superior derecha, inferior derecha, inferior izquierda. Coordenadas de 0 a 1000 (x de izquierda a derecha, y de arriba abajo) relativas a la foto. Si una parte de la hoja se sale de la foto, usa el borde de la foto en esa parte.`;
@@ -851,7 +853,7 @@ function findProv(nombre, cif){
 }
 const provName = id => (S.proveedores[id] && S.proveedores[id].nombre) || 'Sin proveedor';
 function lineImporte(l){ if (l.importe != null) return l.importe; if (l.cantidad != null && l.precio != null) return l.cantidad * l.precio; return null; }
-function docTotal(d){ if (d.total != null) return d.total; return (d.lineas || []).reduce((a, l) => a + (lineImporte(l) || 0), 0); }
+function docTotal(d){ if (d.total != null) return d.total; return (d.lineas || []).reduce((a, l) => a + (l.deAlbaran ? 0 : (lineImporte(l) || 0)), 0); }
 
 /* ===== Temporada ===== */
 function easter(y){
@@ -923,7 +925,7 @@ const sheetHead = t => `<div class="sheet-head"><h2 style="margin:0">${t}</h2><b
 function todasLineas(){
   const out = [];
   for (const [id, d] of Object.entries(S.documentos)){
-    (d.lineas || []).forEach((l, i) => out.push({docId:id, idx:i, ...l, proveedor:provName(d.proveedorId), fecha:d.fecha, tipo:d.tipo}));
+    (d.lineas || []).forEach((l, i) => out.push({docId:id, idx:i, ...l, proveedor:provName(d.proveedorId), fecha:validIso(l.fechaCompra) ? l.fechaCompra : d.fecha, tipo:d.tipo}));
   }
   return out;
 }
@@ -1077,6 +1079,7 @@ function borradorDesde(r){
     id:uid(), tipo:(String(r.tipo || '').toLowerCase().startsWith('alb') ? 'albaran' : 'factura'),
     proveedorId: m ? m.id : (p.nombre ? '__new' : ''), proveedorNuevo:p.nombre || '', cif:p.cif || '', telefono:p.telefono || '',
     numero:r.numero || '', fecha: validIso(r.fecha) ? r.fecha : iso(new Date()), total:num(r.total), fotos:[],
+    albaranes:(Array.isArray(r.albaranes) ? r.albaranes : []).filter(x => x && (x.numero || x.fecha)).map(x => ({numero:x.numero ? String(x.numero) : '', fecha:validIso(x.fecha) ? x.fecha : ''})),
     lineas:(Array.isArray(r.lineas) ? r.lineas : []).filter(l => l && l.producto).map(l => ({
       producto:String(l.producto), cantidad:num(l.cantidad), unidad:l.unidad || '', precio:num(l.precio), importe:num(l.importe),
       lote:l.lote || '', caducidad: validIso(l.caducidad) ? l.caducidad : '', fotoEnvase:'', agotado:false }))
@@ -1241,6 +1244,7 @@ function pintarEditor(){
   const fotos = [...(d.fotos || []).map((ref, i) => EDIT.reempl && EDIT.reempl[i] ? {src:URL.createObjectURL(EDIT.reempl[i]), tipo:'guardada', i} : {ref, tipo:'guardada', i}), ...EDIT.blobs.map((b, i) => ({src:URL.createObjectURL(b), tipo:'nueva', i}))];
   let h = sheetHead(EDIT.nuevo ? 'Revisa los datos' : (d.tipo === 'albaran' ? 'Albarán' : 'Factura'));
   if (EDIT.lote != null) h += `<button class="btn small" style="margin-bottom:.6rem" onclick="volverLote()">← Volver a la lista</button>`;
+  if (Array.isArray(d.incluye) && d.incluye.length) h += `<div class="banner info">Esta factura sustituye a ${d.incluye.length === 1 ? 'su albarán' : 'sus albaranes'}: ${d.incluye.map(a => 'nº ' + esc(a.numero || 's/n') + (validIso(a.fecha) ? ' del ' + fdate(a.fecha) : '')).join(', ')}.</div>`;
   const dup = buscarDuplicado(d, d.proveedorId);
   if (dup) h += `<div class="banner stamp"><b>Este documento ya está guardado.</b><br>${dup.tipo === 'albaran' ? 'Albarán' : 'Factura'} ${esc(dup.numero || '')} de ${esc(provName(dup.proveedorId))}, del ${fdate(dup.fecha)}, por ${money(docTotal(dup))}. No se guardará otra vez.
     <div class="row" style="margin-top:.6rem"><button class="btn small danger" onclick="descartarEditor()">Descartar</button><button class="btn small" onclick="verDuplicado('${dup.id}')">Ver el guardado</button></div></div>`;
@@ -1276,6 +1280,8 @@ function pintarEditor(){
       <div class="envase">${envNueva ? `<img src="${esc(envNueva)}" alt="Envase" onclick="verFoto(this.src)">` : (env ? `<img data-foto="${esc(env)}" alt="Envase" onclick="verFoto(this.src)">` : '')}
         <button class="btn small" id="envBtn${i}" onclick="fotoEnvase(${i})">${env ? 'Repetir foto del envase' : 'Foto del envase (lote y caducidad)'}</button></div>
       ${l.agotado ? '<p class="note">Marcado como gastado.</p>' : ''}
+      ${l.deAlbaran ? '<p class="note">Lote pasado desde el albarán' + (validIso(l.fechaCompra) ? ' del ' + fdate(l.fechaCompra) : '') + '.</p>' : ''}
+      ${l.fotoEnvaseBorrada && !l.fotoEnvase ? '<p class="note">Foto del envase borrada el ' + fdate(l.fotoEnvaseBorrada) + ' (pasados 6 meses). El lote y la caducidad se conservan.</p>' : ''}
     </div>`;
   });
   h += `<button class="btn small" onclick="addLinea()">Añadir producto</button>
@@ -1339,10 +1345,11 @@ async function guardarBorrador(d, blobs, envases, provId, extra){
     const l = d.lineas[i]; if (!l.producto) continue;
     let fe = l.fotoEnvase || '';
     if (envases && envases[i]) fe = await guardarFoto(envases[i]);
-    lineas.push({producto:l.producto, cantidad:l.cantidad, unidad:l.unidad || '', precio:l.precio, importe:l.importe, lote:l.lote || '', caducidad:validIso(l.caducidad) ? l.caducidad : '', fotoEnvase:fe, agotado:!!l.agotado});
+    lineas.push({producto:l.producto, cantidad:l.cantidad, unidad:l.unidad || '', precio:l.precio, importe:l.importe, lote:l.lote || '', caducidad:validIso(l.caducidad) ? l.caducidad : '', fotoEnvase:fe, agotado:!!l.agotado, ...(l.deAlbaran ? {deAlbaran:true} : {}), ...(validIso(l.fechaCompra) ? {fechaCompra:l.fechaCompra} : {}), ...(l.fotoEnvaseBorrada && !fe ? {fotoEnvaseBorrada:l.fotoEnvaseBorrada} : {})});
   }
-  const doc = {tipo:d.tipo, proveedorId:provId, numero:d.numero, fecha:d.fecha, total:d.total, fotos, fotosOrig, recortado, digitalizado:digitalizado && !!fotos.length, lineas, creado:d.creado || Date.now(), actualizado:Date.now()};
+  const doc = {tipo:d.tipo, proveedorId:provId, numero:d.numero, fecha:d.fecha, total:d.total, fotos, fotosOrig, recortado, digitalizado:digitalizado && !!fotos.length, lineas, ...(Array.isArray(d.albaranes) ? {albaranes:d.albaranes} : {}), ...(Array.isArray(d.incluye) && d.incluye.length ? {incluye:d.incluye} : {}), creado:d.creado || Date.now(), actualizado:Date.now()};
   await Store.save('documentos', d.id, doc);
+  try { if (doc.tipo === 'factura') await sustituirAlbaranes(d.id); else await buscarFacturaDeAlbaran(d.id); } catch(e){}
 }
 async function guardarDoc(){
   syncEditor(); const d = EDIT.draft;
@@ -1581,7 +1588,7 @@ function aggCompras(desde){
     if (desde && (d.fecha || '') < desde) continue;
     const pv = provName(d.proveedorId); const t = docTotal(d); total += t; porProv[pv] = (porProv[pv] || 0) + t;
     (d.lineas || []).forEach(l => {
-      const k = norm(l.producto); if (!k) return;
+      const k = norm(l.producto); if (!k || l.deAlbaran) return;
       const m = map[k] || (map[k] = {nombre:l.producto, veces:0, cantidad:0, unidad:l.unidad || '', gasto:0, fechas:new Set()});
       m.veces++; m.cantidad += l.cantidad || 0; m.gasto += lineImporte(l) || 0; if (d.fecha) m.fechas.add(d.fecha);
     });
@@ -1947,7 +1954,7 @@ function productosCompra(desde){
   for (const d of Object.values(S.documentos)){
     if (desde && (d.fecha || '') < desde) continue;
     (d.lineas || []).forEach(l => {
-      const k = norm(l.producto); if (!k) return;
+      const k = norm(l.producto); if (!k || l.deAlbaran) return;
       const m = map[k] || (map[k] = {key:k, nombre:l.producto, unidad:l.unidad || '', prov:provName(d.proveedorId), cantidad:0, gasto:0, cantConPrecio:0});
       m.cantidad += l.cantidad || 0; const imp = lineImporte(l); if (imp != null && l.cantidad){ m.gasto += imp; m.cantConPrecio += l.cantidad; }
       if (!m.unidad && l.unidad) m.unidad = l.unidad;
@@ -2152,6 +2159,11 @@ function abrirAjustes(){
     <h3 style="margin-top:1.2rem">Recortar y digitalizar facturas ya guardadas</h3>
     <p class="note">Aplica el recorte y el digitalizado a los documentos que guardaste antes. Las fotos originales se conservan en este móvil. ${porRecortar().length ? 'Quedan <b>' + porRecortar().length + '</b> documentos por recortar.' : 'No queda ninguno por recortar.'}</p>
     ${porRecortar().length ? `<button class="btn small solid" id="btnRecAnt" onclick="recortarAntiguas()">${RECORTANDO ? 'Trabajando…' : 'Recortar y digitalizar ahora'}</button>` : ''}
+    <h3 style="margin-top:1.2rem">Albaranes y facturas</h3>
+    <p class="note">Cuando guardas una factura, sus albaranes se borran solos y sus lotes, caducidades y fotos de envase pasan a la factura. Para aplicarlo a lo que ya tenías guardado:</p>
+    <button class="btn small solid" id="btnSust" onclick="sustituirAntiguos()">${SUSTITUYENDO ? 'Buscando…' : 'Sustituir albaranes ya facturados'}</button>
+    <h3 style="margin-top:1.2rem">Fotos de los lotes</h3>
+    <p class="note">La foto del envase se borra sola 6 meses después de la compra, o 6 meses después de la caducidad si es posterior (guía de trazabilidad de Sanidad). El lote, la caducidad, el proveedor y la fecha de compra se conservan siempre.</p>
     <h3 style="margin-top:1.2rem">Tus datos</h3>
     <p class="note">${leerCfg() ? 'Tus datos están en este móvil y en tu nube de Firebase. La copia de seguridad es un extra por si acaso.' : 'Todo se guarda en este móvil, sin nube. Descarga una copia de seguridad cada semana y guárdala en tu Google Drive o envíatela por correo.'}</p>
     <div class="row"><button class="btn small" onclick="backup()">Descargar copia</button><button class="btn small" onclick="restaurar()">Restaurar copia</button></div>
@@ -2199,6 +2211,119 @@ async function recortarAntiguas(){
   RECORTANDO = false;
   if ($('#btnRecAnt')) abrirAjustes();
 }
+
+/* ===== La factura sustituye a sus albaranes (pasa lotes, caducidades y fotos de envase) ===== */
+function borrarFoto(ref){
+  if (!ref || !String(ref).startsWith('idb:')) return;
+  const id = ref.slice(4); IDB.del('fotos', id).catch(() => {});
+  if (FOTOURL[id]){ try { URL.revokeObjectURL(FOTOURL[id]); } catch(e){} delete FOTOURL[id]; }
+  if (fbActivo() && !id.startsWith('o_')) FB.mod.deleteDoc(FB.mod.doc(fbCol('fotos'), id)).catch(() => {});
+}
+function parecido(a, b){
+  if (!a || !b) return false; if (a === b || a.includes(b) || b.includes(a)) return true;
+  const ta = a.split(' ').filter(w => w.length > 2), tb = new Set(b.split(' ').filter(w => w.length > 2));
+  if (!ta.length || !tb.size) return false;
+  const comunes = ta.filter(w => tb.has(w)).length; return comunes / Math.min(ta.length, tb.size) >= 0.6;
+}
+function albaranesDeFactura(fid){
+  const f = S.documentos[fid]; if (!f || f.tipo !== 'factura' || !f.proveedorId) return [];
+  const cands = Object.entries(S.documentos).filter(([id, d]) => id !== fid && d.tipo === 'albaran' && d.proveedorId === f.proveedorId);
+  if (!cands.length) return [];
+  const refs = Array.isArray(f.albaranes) ? f.albaranes : [];
+  const nums = refs.map(r => normNum(r && r.numero)).filter(n => n && n.length >= 3);
+  const fechas = new Set(refs.map(r => r && r.fecha).filter(validIso));
+  let m = [];
+  if (nums.length) m = cands.filter(([, d]) => { const n = normNum(d.numero); return n && nums.some(x => x === n || (x.length >= 5 && n.length >= 5 && (x.endsWith(n) || n.endsWith(x)))); });
+  if (!m.length && fechas.size) m = cands.filter(([, d]) => fechas.has(d.fecha) && (!validIso(f.fecha) || d.fecha <= f.fecha));
+  if (!m.length && f.total != null){
+    const t = cands.filter(([, d]) => d.total != null && Math.abs(d.total - f.total) < 0.02 && (!validIso(f.fecha) || !validIso(d.fecha) || (d.fecha <= f.fecha && diffDays(pd(d.fecha), pd(f.fecha)) <= 62)));
+    if (t.length === 1) m = t;
+  }
+  return m;
+}
+async function sustituirAlbaranes(fid, silencio){
+  const m = albaranesDeFactura(fid); if (!m.length) return 0;
+  const f = JSON.parse(JSON.stringify(S.documentos[fid])); f.lineas = f.lineas || []; f.incluye = f.incluye || [];
+  const fotosABorrar = [];
+  for (const [, a] of m){
+    for (const l of (a.lineas || [])){
+      if (!(l.lote || validIso(l.caducidad) || l.fotoEnvase || l.agotado)) continue;
+      const k = norm(l.producto);
+      const dest = f.lineas.find(x => !x.deAlbaran && !x.lote && !x.fotoEnvase && !validIso(x.caducidad) && parecido(norm(x.producto), k));
+      if (dest){
+        dest.lote = l.lote || ''; if (validIso(l.caducidad)) dest.caducidad = l.caducidad;
+        if (l.fotoEnvase) dest.fotoEnvase = l.fotoEnvase; if (l.fotoEnvaseBorrada) dest.fotoEnvaseBorrada = l.fotoEnvaseBorrada;
+        dest.agotado = !!(dest.agotado || l.agotado); if (validIso(a.fecha)) dest.fechaCompra = a.fecha;
+      } else {
+        f.lineas.push({producto:l.producto, cantidad:l.cantidad ?? null, unidad:l.unidad || '', precio:null, importe:null, lote:l.lote || '', caducidad:validIso(l.caducidad) ? l.caducidad : '', fotoEnvase:l.fotoEnvase || '', agotado:!!l.agotado, deAlbaran:true, fechaCompra:validIso(a.fecha) ? a.fecha : (l.fechaCompra || '')});
+      }
+    }
+    f.incluye.push({numero:a.numero || '', fecha:a.fecha || '', total:a.total ?? null});
+    fotosABorrar.push(...(a.fotos || []), ...(a.fotosOrig || []).filter(Boolean));
+  }
+  f.actualizado = Date.now();
+  await Store.save('documentos', fid, f);
+  for (const [aid] of m) await Store.del('documentos', aid);
+  fotosABorrar.forEach(borrarFoto);
+  if (!silencio) setTimeout(() => toast('Albarán' + (m.length > 1 ? 'es' : '') + ' ' + m.map(([, a]) => 'nº ' + (a.numero || 's/n')).join(', ') + ' sustituido' + (m.length > 1 ? 's' : '') + ' por la factura ' + (f.numero || '') + '. Lotes y caducidades pasados a la factura.', 7000), 1500);
+  return m.length;
+}
+// Al guardar un albarán, por si su factura ya estaba guardada
+async function buscarFacturaDeAlbaran(aid){
+  const a = S.documentos[aid]; if (!a || a.tipo !== 'albaran') return;
+  for (const [fid, f] of Object.entries(S.documentos)) if (f.tipo === 'factura' && f.proveedorId === a.proveedorId && albaranesDeFactura(fid).some(([id]) => id === aid)){ await sustituirAlbaranes(fid); return; }
+}
+function promptRefsAlbaranes(n){
+  return `Te paso ${n} foto${n === 1 ? '' : 's'} de una FACTURA de proveedor. Busca los albaranes que incluye (por ejemplo «Albarán nº», «Doc. Nº», «Nota de entrega», con su fecha).
+Responde SOLO con un objeto JSON: {"albaranes":[{"numero":string|null,"fecha":"AAAA-MM-DD"|null}]}
+Si la factura no menciona albaranes, devuelve {"albaranes":[]}. No inventes nada.`;
+}
+let SUSTITUYENDO = false;
+async function sustituirAntiguos(){
+  if (SUSTITUYENDO) return; SUSTITUYENDO = true;
+  const b = $('#btnSust'); if (b){ b.disabled = true; b.textContent = 'Buscando…'; }
+  let total = 0;
+  try {
+    const facturas = Object.entries(S.documentos).filter(([, d]) => d.tipo === 'factura').sort((x, y) => (x[1].fecha || '').localeCompare(y[1].fecha || ''));
+    for (const [fid, f] of facturas){
+      if (!S.documentos[fid]) continue;
+      const hayAlb = Object.values(S.documentos).some(d => d.tipo === 'albaran' && d.proveedorId === f.proveedorId);
+      if (!hayAlb) continue;
+      if (!Array.isArray(f.albaranes) && hasKey() && (f.fotos || []).length){
+        toast('Leyendo la factura ' + (f.numero || '') + '…', 15000);
+        const blobs = []; for (const ref of f.fotos) { const x = await getFotoBlob(ref); if (x) blobs.push(x); }
+        if (blobs.length){ const r = await askJSON(promptRefsAlbaranes(blobs.length), blobs, true);
+          await Store.save('documentos', fid, {...S.documentos[fid], albaranes:((r && r.albaranes) || []).filter(x => x && (x.numero || x.fecha)).map(x => ({numero:x.numero ? String(x.numero) : '', fecha:validIso(x.fecha) ? x.fecha : ''}))}); }
+      }
+      total += await sustituirAlbaranes(fid, true);
+    }
+    toast(total ? 'Listo: ' + total + ' albarán' + (total === 1 ? '' : 'es') + ' sustituido' + (total === 1 ? '' : 's') + ' por su factura.' : 'No se ha encontrado ningún albarán con su factura guardada.', 6000);
+  } catch(e){ toast(errMsg(e) + ' Pulsa otra vez para seguir.', 7000); }
+  SUSTITUYENDO = false; if ($('#btnSust')) abrirAjustes();
+}
+
+/* ===== Fotos de envases: se borran 6 meses después de la compra (o de la caducidad, si es posterior). El lote y la fecha se conservan. ===== */
+function sumarMeses(d, n){ const x = new Date(d); const dia = x.getDate(); x.setDate(1); x.setMonth(x.getMonth() + n); x.setDate(Math.min(dia, new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate())); return x; }
+function limiteFotoLote(l, d){
+  const compra = validIso(l.fechaCompra) ? l.fechaCompra : d.fecha; if (!validIso(compra)) return null;
+  const base = validIso(l.caducidad) && l.caducidad > compra ? l.caducidad : compra;
+  return iso(sumarMeses(pd(base), 6));
+}
+async function limpiarFotosLotes(){
+  const hoy = iso(new Date()); if (localStorage.getItem('limpiezaLotes') === hoy) return;
+  let n = 0;
+  for (const [id, d] of Object.entries(S.documentos)){
+    let cambio = false;
+    const lineas = (d.lineas || []).map(l => {
+      if (!l.fotoEnvase) return l; const lim = limiteFotoLote(l, d); if (!lim || hoy < lim) return l;
+      borrarFoto(l.fotoEnvase); cambio = true; n++; return {...l, fotoEnvase:'', fotoEnvaseBorrada:hoy};
+    });
+    if (cambio) await Store.save('documentos', id, {...d, lineas, actualizado:Date.now()});
+  }
+  localStorage.setItem('limpiezaLotes', hoy);
+  if (n) toast(n + ' foto' + (n === 1 ? '' : 's') + ' de envases antiguas borrada' + (n === 1 ? '' : 's') + ' (el lote y la caducidad se conservan).', 6000);
+}
+setTimeout(() => { if (LISTO) limpiarFotosLotes(); }, 25000);
 
 /* ===== Actualizaciones automáticas ===== */
 let NUEVA = null;
